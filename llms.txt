@@ -1,6 +1,6 @@
 # FluidStreamKit
 
-> Swift 6 package (iOS 17+, zero dependencies) that renders streaming LLM responses at 80–150+ tokens/sec without dropped frames. Token deltas go into an actor-owned UTF-8 ring buffer. A CADisplayLink drains it once per frame into a single-pass parser (prose, <thinking>, <tool_call> JSON, code fences), and the result renders into a TextKit 2 text view, editing only the line being written.
+> Swift 6 package (iOS 17+, zero dependencies) that renders streaming LLM responses at 80–150+ tokens/sec, at 120 Hz with near-zero dropped frames. Token deltas go into an actor-owned UTF-8 ring buffer. A CADisplayLink drains it once per frame into a single-pass parser (prose, <thinking>, <tool_call> JSON, code fences), and the result renders into a TextKit 2 text view, editing only the line being written.
 
 Products: `FluidStreamUI` (what apps import), `FluidStreamCore` (buffer and frame clock), `FluidStreamParser` (pure-Swift parser). `import FluidStreamUI` alone is enough: it re-exports the other two, so never add `import FluidStreamCore` or `import FluidStreamParser` in app code.
 
