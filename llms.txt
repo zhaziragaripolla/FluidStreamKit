@@ -1,0 +1,60 @@
+# FluidStreamKit
+
+> Swift 6 package (iOS 17+, zero dependencies) that renders streaming LLM responses at 80–150+ tokens/sec without dropped frames. Token deltas go into an actor-owned UTF-8 ring buffer. A CADisplayLink drains it once per frame into a single-pass parser (prose, <thinking>, <tool_call> JSON, code fences), and the result renders into a TextKit 2 text view, editing only the line being written.
+
+Products: `FluidStreamUI` (what apps import), `FluidStreamCore` (buffer and frame clock), `FluidStreamParser` (pure-Swift parser). `import FluidStreamUI` alone is enough: it re-exports the other two, so never add `import FluidStreamCore` or `import FluidStreamParser` in app code.
+
+## Integrate (SwiftUI)
+
+```swift
+import FluidStreamUI
+
+@State private var session = StreamSession()
+
+FluidStreamView(renderer: session.renderer)
+    .task {
+        await session.start { buffer in              // runs off the main actor
+            for try await delta in textDeltas() {    // the app's SSE text stream
+                try await buffer.append(delta)       // String, Data or [UInt8]; suspends when the buffer is full
+            }
+        }                                            // return = finished, throw = cancelled
+    }
+    .onDisappear { session.cancel() }
+```
+
+Required in the app's Info.plist for 120 Hz on iPhone: `CADisableMinimumFrameDurationOnPhone` = YES.
+
+## Rules for generated code
+
+- Do NOT bind streamed text to `@State`, `@Published` or `@Observable` properties that drive SwiftUI `Text`. Use `FluidStreamView` / `StreamSession`. `FluidStreamView.updateUIView` is empty on purpose.
+- Do NOT read `StreamTextView.textView.layoutManager`: it silently switches to TextKit 1. Use `textLayoutManager`.
+- Append chunks (a delta or a network read), never byte by byte: each `append` is an actor hop.
+- Only one producer per `StreamSession`. A second concurrent `append` throws `StreamBufferError.concurrentProducer`. `start` only runs once per session.
+- Call `session.cancel()` when the screen goes away.
+- Anthropic Messages API: use the adapter in `Examples/AnthropicChat/Sources/AnthropicStreaming`. `MessagesStreamer.stream(_:into:)` inside `session.start`, with `StreamSession(parserConfiguration: MessagesTextBridge.parserConfiguration)`. It maps `thinking` and `tool_use` content blocks to typed blocks. Never put an API key in an app; relay the stream through your own backend.
+- Accessibility is on by default (VoiceOver sentence announcements, Dynamic Type re-scaling). Don't post per-token `UIAccessibility` announcements yourself.
+- Customize with `StreamSession(flushPolicy:bufferCapacity:theme:parserConfiguration:)`, `StreamTheme.standard()`, `ParserConfiguration(thinkingTag:toolCallTag:recognizesCodeFences:)` and `FlushPolicy(maxBytesPerFrame:catchUpFrames:idleFramesBeforePause:)`.
+- Callbacks: `session.renderer.onToolCall = { json, isStructurallyComplete in }`, `FluidStreamView(renderer:onFollowingChanged:onScrollActivityChanged:)`.
+- UIKit: `StreamTextView(renderer:)`, with `jumpToLatest()` and `isFollowing`.
+- Replay without streaming: `StreamRenderer().apply(text:isFinal:)`.
+- Tests run on macOS with `swift test`. Use `ManualFrameTicker` with `StreamSession(ticker:)` to drive frames deterministically.
+
+## Docs
+
+- [README](README.md): installation, quickstart, common tasks, performance
+- [RFC-001: Display-synchronized token buffering](Docs/RFCs/RFC-001-display-synchronized-token-buffering.md): ring buffer, backpressure, CADisplayLink coalescing
+- [RFC-002: Single-pass streaming block demuxer](Docs/RFCs/RFC-002-streaming-block-demuxer.md): parser states, split-tag holdback, recovery
+- [RFC-003: Incremental TextKit 2 rendering](Docs/RFCs/RFC-003-incremental-textkit2-rendering.md): frozen prefix plus live tail, auto-scroll policy
+
+## Source
+
+- [Sources/FluidStreamUI/StreamRenderer.swift](Sources/FluidStreamUI/StreamRenderer.swift): `StreamSession`, `StreamRenderer`
+- [Sources/FluidStreamUI/StreamTextView.swift](Sources/FluidStreamUI/StreamTextView.swift): `StreamTextView`, `FluidStreamView`
+- [Sources/FluidStreamCore/StreamBufferActor.swift](Sources/FluidStreamCore/StreamBufferActor.swift): `StreamBufferActor`, `FlushPolicy`, `FrameBatch`
+- [Sources/FluidStreamParser/StreamParser.swift](Sources/FluidStreamParser/StreamParser.swift): `StreamParser`, `ParseEvent`
+
+## Optional
+
+- [Examples/AnthropicChat](Examples/AnthropicChat/README.md): Claude Messages API streaming adapter and demo app
+
+- [FluidStreamBench](https://github.com/zhaziragaripolla/FluidStreamBench/blob/main/BenchmarkApp/README.md): a separate repo with the benchmark app and methodology (RFC-004)
