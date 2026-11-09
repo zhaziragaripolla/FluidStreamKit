@@ -1,5 +1,7 @@
 # FluidStreamKit
 
+[![CI](https://github.com/zhaziragaripolla/FluidStreamKit/actions/workflows/ci.yml/badge.svg)](https://github.com/zhaziragaripolla/FluidStreamKit/actions/workflows/ci.yml)
+
 Render streaming LLM responses on iOS at 80–150+ tokens per second without dropped frames.
 
 `FluidStreamKit` sits between your network stream and the screen:

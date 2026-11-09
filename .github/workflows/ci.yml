@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macos:
+    name: Tests (macOS)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: swift --version
+      - name: Library tests
+        run: swift test
+      - name: Anthropic example tests
+        working-directory: Examples/AnthropicChat
+        run: swift test
+
+  build-ios:
+    name: Build (iOS)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      # Builds the UIKit code paths, which the macOS tests don't compile.
+      - run: xcodebuild build -scheme FluidStreamKit-Package -destination 'generic/platform=iOS' -quiet
