@@ -6,6 +6,7 @@ All notable changes to FluidStreamKit. The format follows [Keep a Changelog](htt
 
 ### Added
 - `FluidStreamHost` (v2, in progress, RFC-005): A2UI v0.9.1 message decoding, a JSONL line decoder, per-surface component and data-model state with JSON Pointer bindings, a resolved component tree (pending children, templates, cycle and size limits), input write-back and action messages.
+- `FluidStreamHostUI` (v2, in progress): `A2UISurfaceView` and `A2UICatalog`, with native SwiftUI views for Text, Image, Icon, Row, Column, List, Card, Divider, Button, TextField, CheckBox and Slider. Apps add or replace components with `register(_:)`, and media URLs are filtered to http, https and data.
 
 ## [1.0.0] - 2026-11-09
 

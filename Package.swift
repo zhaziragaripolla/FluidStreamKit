@@ -23,6 +23,8 @@ let package = Package(
         .library(name: "FluidStreamUI", targets: ["FluidStreamUI"]),
         // v2 GenUI host (RFC-005): A2UI protocol and surface state, no UI.
         .library(name: "FluidStreamHost", targets: ["FluidStreamHost"]),
+        // SwiftUI rendering for the host: the basic catalog plus your own components.
+        .library(name: "FluidStreamHostUI", targets: ["FluidStreamHostUI"]),
     ],
     // No dependencies, by design. The benchmark harness lives in the separate FluidStreamBench
     // package, so comparisons against other libraries never add dependencies here.
@@ -48,9 +50,14 @@ let package = Package(
             name: "FluidStreamHost",
             swiftSettings: strictSettings
         ),
+        .target(
+            name: "FluidStreamHostUI",
+            dependencies: ["FluidStreamHost"],
+            swiftSettings: strictSettings
+        ),
         .testTarget(
             name: "FluidStreamHostTests",
-            dependencies: ["FluidStreamHost"],
+            dependencies: ["FluidStreamHost", "FluidStreamHostUI"],
             swiftSettings: strictSettings
         ),
         .testTarget(
