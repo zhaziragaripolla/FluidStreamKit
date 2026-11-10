@@ -113,7 +113,12 @@ public struct A2UISurface: Sendable, Hashable, Identifiable {
                 }
             }
         }
-        return ResolvedNode(id: key, componentId: componentId, scope: scope, state: .ready(component), children: children)
+        var resolved = ResolvedNode(id: key, componentId: componentId, scope: scope, state: .ready(component), children: children)
+        // An inline fallback (RFC-006): another component to show if this build can't render this one.
+        if let fallbackId = component["fallback"]?.stringValue {
+            resolved.fallbackNodes = [node(fallbackId, scope: scope, ancestors: path, depth: depth + 1, limits: limits, budget: &budget)]
+        }
+        return resolved
     }
 }
 
@@ -134,6 +139,10 @@ public struct ResolvedNode: Sendable, Hashable, Identifiable {
     public let scope: JSONPointer
     public let state: State
     public var children: [ResolvedNode] = []
+    var fallbackNodes: [ResolvedNode] = []
+
+    /// The component named by this one's `"fallback"` property, if any. Not part of `children`.
+    public var fallback: ResolvedNode? { fallbackNodes.first }
 
     public var component: A2UIComponent? {
         if case .ready(let c) = state { return c }

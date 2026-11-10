@@ -80,6 +80,16 @@ struct CatalogTests {
         #expect(literalStore.surfaces["s"]?.dataModel == [:])
     }
 
+    @Test func bindingsReadLiveFromTheStore() throws {
+        let (ctx, store) = try context(
+            A2UIComponent(id: "root", type: "TextField", properties: ["value": ["path": "/name"]]),
+            data: ["name": "Alex"])
+        // A control can keep a binding made in an earlier render; it must still see new data.
+        let text = ctx.binding("value", default: "", get: { $0.stringValue }, set: { .string($0) })
+        store.apply(.updateDataModel(surfaceId: "s", path: "/name", value: "Sam"))
+        #expect(text.wrappedValue == "Sam")
+    }
+
     @Test func iconNamesMapToSymbols() {
         #expect(A2UIIconView.symbol(for: "check") == "checkmark")
         #expect(A2UIIconView.symbol(for: "star.fill") == "star.fill")

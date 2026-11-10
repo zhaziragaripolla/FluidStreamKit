@@ -21,6 +21,7 @@ extension A2UICatalog {
         c.register("TextField") { A2UITextFieldView(context: $0) }
         c.register("CheckBox") { A2UICheckBoxView(context: $0) }
         c.register("Slider") { A2UISliderView(context: $0) }
+        for schema in A2UIComponentSchema.basicSubset { c.describe(schema) }
         return c
     }
 }
@@ -102,6 +103,7 @@ struct A2UIIconView: View {
 
     var body: some View {
         Image(systemName: Self.symbol(for: context.string("name") ?? ""))
+            .frame(minWidth: 24, minHeight: 24)   // one size, so icons in a list line up
             .accessibilityLabel(context.string("name") ?? "")
     }
 
@@ -201,7 +203,7 @@ struct A2UICardView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.separator, lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.separator, lineWidth: 0.5).allowsHitTesting(false))
         .accessibilityElement(children: .contain)
     }
 }

@@ -7,6 +7,15 @@ All notable changes to FluidStreamKit. The format follows [Keep a Changelog](htt
 ### Added
 - `FluidStreamHost` (v2, in progress, RFC-005): A2UI v0.9.1 message decoding, a JSONL line decoder, per-surface component and data-model state with JSON Pointer bindings, a resolved component tree (pending children, templates, cycle and size limits), input write-back and action messages.
 - `FluidStreamHostUI` (v2, in progress): `A2UISurfaceView` and `A2UICatalog`, with native SwiftUI views for Text, Image, Icon, Row, Column, List, Card, Divider, Button, TextField, CheckBox and Slider. Apps add or replace components with `register(_:)`, and media URLs are filtered to http, https and data.
+- Catalog schemas, versioning and fallbacks (RFC-006):
+  - `A2UIComponentSchema` and `A2UICatalogManifest` describe what a build can render, as JSON, with `agentInstructions()` for the agent's prompt;
+  - `A2UIDowncompiler` rewrites unknown or too-new components into their declared fallbacks and reports each substitution;
+  - components can ask for a version with `minVersion` and name an inline `fallback`;
+  - `A2UICatalog.register(_ schema:)` and `manifest(version:)`.
+- `Examples/GenUIDemo`: a scripted agent streaming a surface, with a custom component and a booking round trip.
+
+### Fixed
+- Input bindings read live from the store, so a control can't snap back to stale data.
 
 ## [1.0.0] - 2026-11-09
 

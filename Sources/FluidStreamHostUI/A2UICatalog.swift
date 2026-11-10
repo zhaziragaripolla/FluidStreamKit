@@ -19,10 +19,42 @@ public struct A2UICatalog {
     /// The catalog id this app advertises to the agent.
     public var id: String
     private var builders: [String: Builder]
+    private var schemas: [String: A2UIComponentSchema] = [:]
 
     public init(id: String, builders: [String: Builder] = [:]) {
         self.id = id
         self.builders = builders
+    }
+
+    /// Adds a component together with its schema: its version, properties and fallback. The
+    /// schema is what the agent and the down-compiler learn about it (RFC-006).
+    public mutating func register<Content: View>(
+        _ schema: A2UIComponentSchema,
+        @ViewBuilder _ build: @escaping @MainActor (A2UIComponentContext) -> Content
+    ) {
+        register(schema.name, build)
+        schemas[schema.name] = schema
+    }
+
+    /// Attaches or replaces the schema of an already registered component.
+    public mutating func describe(_ schema: A2UIComponentSchema) {
+        guard builders[schema.name] != nil else { return }
+        schemas[schema.name] = schema
+    }
+
+    public func schema(for type: String) -> A2UIComponentSchema? {
+        builders[type] == nil ? nil : (schemas[type] ?? A2UIComponentSchema(name: type))
+    }
+
+    /// Everything this catalog can render, as data. `version` is yours: a build number works.
+    public func manifest(version: String) -> A2UICatalogManifest {
+        A2UICatalogManifest(catalogId: id, version: version, components: builders.keys.compactMap { schema(for: $0) })
+    }
+
+    /// Whether this catalog can render the component at the version it asks for.
+    public func supports(_ component: A2UIComponent) -> Bool {
+        guard let schema = schema(for: component.type) else { return false }
+        return component.minimumVersion <= schema.version
     }
 
     /// Adds a component, or replaces the one with the same name.
@@ -40,6 +72,16 @@ public struct A2UICatalog {
     ) -> A2UICatalog {
         var copy = self
         copy.register(type, build)
+        return copy
+    }
+
+    /// A copy with the component and its schema added or replaced.
+    public func registering<Content: View>(
+        _ schema: A2UIComponentSchema,
+        @ViewBuilder _ build: @escaping @MainActor (A2UIComponentContext) -> Content
+    ) -> A2UICatalog {
+        var copy = self
+        copy.register(schema, build)
         return copy
     }
 
@@ -90,8 +132,11 @@ public struct A2UIComponentContext {
     /// A SwiftUI binding for a two-way input property.
     public func binding<T>(_ key: String, default fallback: T, get: @escaping (JSONValue) -> T?,
                            set: @escaping (T) -> JSONValue) -> Binding<T> {
-        Binding(
-            get: { value(key).flatMap(get) ?? fallback },
+        // Read live from the store, not from this context's snapshot: SwiftUI controls can keep
+        // a binding longer than one render, and a stale read would snap the control back.
+        let store = environment.store, surfaceId = surface.id, property = component[key], scope = node.scope
+        return Binding(
+            get: { store.surfaces[surfaceId]?.resolve(property, scope: scope).flatMap(get) ?? fallback },
             set: { write(set($0), to: key) }
         )
     }
@@ -173,8 +218,11 @@ struct A2UINodeView: View {
         case .ready(let component):
             if let surface = environment.store.surfaces[environment.surfaceId] {
                 let context = A2UIComponentContext(node: node, component: component, surface: surface, environment: environment)
-                if let build = environment.catalog.builder(for: component.type) {
+                if environment.catalog.supports(component), let build = environment.catalog.builder(for: component.type) {
                     build(context)
+                } else if let fallback = node.fallback {
+                    // Unknown type, or newer than this build: show what the agent named instead.
+                    A2UINodeView(node: fallback, environment: environment)
                 } else {
                     A2UIFallbackView(context: context)
                 }

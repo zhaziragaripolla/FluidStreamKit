@@ -75,7 +75,7 @@ bytes ──▶ A2UILineDecoder ──▶ A2UIMessage ──▶ A2UISurfaceStore
 - **URL rule from the spec:** only `http:`, `https:`, `data:` and relative URLs are allowed, and `//`-relative URLs are rejected.
 
 **Where the stream comes from.**
-- A2UI is transport-agnostic, and its stable bindings are A2A and AG-UI (RFC-006). Plain JSONL over HTTP or SSE works for a custom backend.
+- A2UI is transport-agnostic, and its stable bindings are A2A and AG-UI (a later RFC). Plain JSONL over HTTP or SSE works for a custom backend.
 - Inside a text answer, A2UI payloads can arrive as a fenced block (```` ```a2ui ````). RFC-002's demuxer already isolates fences, so the renderer forwards that block's bytes to an `A2UILineDecoder`, and the surface appears inline in the answer.
 
 ## Rollout
