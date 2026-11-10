@@ -5,7 +5,7 @@ extension A2UICatalog {
     /// The A2UI v0.9.1 basic catalog, rendered natively.
     ///
     /// Covered so far: Text, Image, Icon, Row, Column, List, Card, Divider, Button, TextField,
-    /// CheckBox and Slider. Tabs, Modal, ChoicePicker, DateTimeInput, Video and AudioPlayer come
+    /// CheckBox, Slider, ChoicePicker and DateTimeInput. Tabs, Modal, Video and AudioPlayer come
     /// next (RFC-005 rollout step 3); until then they render through the fallback.
     public static var basic: A2UICatalog {
         var c = A2UICatalog(id: "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json")
@@ -21,6 +21,8 @@ extension A2UICatalog {
         c.register("TextField") { A2UITextFieldView(context: $0) }
         c.register("CheckBox") { A2UICheckBoxView(context: $0) }
         c.register("Slider") { A2UISliderView(context: $0) }
+        c.register("ChoicePicker") { A2UIChoicePickerView(context: $0) }
+        c.register("DateTimeInput") { A2UIDateTimeInputView(context: $0) }
         for schema in A2UIComponentSchema.basicSubset { c.describe(schema) }
         return c
     }

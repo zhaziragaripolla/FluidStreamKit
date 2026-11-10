@@ -12,6 +12,7 @@ All notable changes to FluidStreamKit. The format follows [Keep a Changelog](htt
   - `A2UIDowncompiler` rewrites unknown or too-new components into their declared fallbacks and reports each substitution;
   - components can ask for a version with `minVersion` and name an inline `fallback`;
   - `A2UICatalog.register(_ schema:)` and `manifest(version:)`.
+- `ChoicePicker` and `DateTimeInput` in the basic catalog, and `A2UICatalog.fluid`, which adds a data-driven `Table` under its own catalog id.
 - `Examples/GenUIDemo`: a scripted agent streaming a surface, with a custom component and a booking round trip.
 
 ### Fixed

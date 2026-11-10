@@ -184,6 +184,20 @@ extension A2UIComponentSchema {
             .init("label", .string, required: true),
             .init("value", .boolean, "Bind with {\"path\"}"),
         ]),
+        .init(name: "ChoicePicker", description: "Pick one or several options.", properties: [
+            .init("options", .array, required: true, "[{\"label\": \"Email\", \"value\": \"email\"}]"),
+            .init("value", .array, "Selected values. Bind with {\"path\"}"),
+            .init("variant", .string, "mutuallyExclusive for a single choice"),
+            .init("label", .string),
+        ]),
+        .init(name: "DateTimeInput", properties: [
+            .init("value", .string, "ISO 8601. Bind with {\"path\"}"),
+            .init("label", .string),
+            .init("enableDate", .boolean, "Default true"),
+            .init("enableTime", .boolean, "Default false"),
+            .init("min", .string, "ISO 8601"),
+            .init("max", .string, "ISO 8601"),
+        ]),
         .init(name: "Slider", properties: [
             .init("label", .string),
             .init("value", .number, "Bind with {\"path\"}"),

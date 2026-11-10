@@ -45,7 +45,7 @@ struct CatalogTests {
 
     @Test func basicCatalogCoversTheFirstSlice() {
         let expected: Set = ["Text", "Image", "Icon", "Row", "Column", "List", "Card", "Divider",
-                             "Button", "TextField", "CheckBox", "Slider"]
+                             "Button", "TextField", "CheckBox", "Slider", "ChoicePicker", "DateTimeInput"]
         #expect(A2UICatalog.basic.componentTypes == expected)
     }
 
@@ -88,6 +88,47 @@ struct CatalogTests {
         let text = ctx.binding("value", default: "", get: { $0.stringValue }, set: { .string($0) })
         store.apply(.updateDataModel(surfaceId: "s", path: "/name", value: "Sam"))
         #expect(text.wrappedValue == "Sam")
+    }
+
+    @Test func fluidCatalogAddsTableUnderItsOwnId() {
+        let fluid = A2UICatalog.fluid
+        #expect(fluid.componentTypes == A2UICatalog.basic.componentTypes.union(["Table"]))
+        #expect(fluid.id != A2UICatalog.basic.id)
+        #expect(fluid.manifest(version: "1").schema(for: "Table")?.fallback != nil)
+    }
+
+    @Test func choicePickerSelection() {
+        let options = A2UIChoice.options(from: [["label": "Email", "value": "email"], "phone", ["label": "No value"]])
+        #expect(options == [.init(label: "Email", value: "email"), .init(label: "phone", value: "phone")])
+        #expect(A2UIChoice.selection(from: ["a", "b"]) == ["a", "b"])
+        #expect(A2UIChoice.selection(from: "a") == ["a"])
+        #expect(A2UIChoice.selection(from: nil) == [])
+        #expect(A2UIChoice.toggling("b", in: ["a"], exclusive: false) == ["a", "b"])
+        #expect(A2UIChoice.toggling("a", in: ["a", "b"], exclusive: false) == ["b"])
+        #expect(A2UIChoice.toggling("b", in: ["a"], exclusive: true) == ["b"])
+    }
+
+    @Test func dateValuesRoundTripAsISO8601() throws {
+        let day = try #require(A2UIDateValue.parse("2026-11-14"))
+        #expect(A2UIDateValue.format(day, includesTime: false) == "2026-11-14")
+        let moment = try #require(A2UIDateValue.parse("2026-11-14T09:30:00Z"))
+        #expect(A2UIDateValue.format(moment, includesTime: true) == "2026-11-14T09:30:00Z")
+        #expect(A2UIDateValue.parse("next tuesday") == nil)
+    }
+
+    @Test func tableCellsComeFromRowData() throws {
+        let (ctx, _) = try context(
+            A2UIComponent(id: "root", type: "Table", properties: [
+                "columns": [["title": "Hotel", "path": "name"], ["title": "Night", "path": "price/amount", "align": "end"], ["path": "missing"]],
+                "rows": ["path": "/hotels"],
+            ]),
+            data: ["hotels": [["name": "Baixa Loft", "price": ["amount": 112]], ["name": "Cascais Garden", "price": ["amount": 96]]]])
+        let columns = A2UITable.columns(from: ctx.value("columns"))
+        #expect(columns.map(\.title) == ["Hotel", "Night", "missing"])
+        #expect(columns.map(\.alignsEnd) == [false, true, false])
+        #expect(A2UITable.cells(rows: ctx.value("rows"), columns: columns) == [["Baixa Loft", "112", ""], ["Cascais Garden", "96", ""]])
+        #expect(A2UITable.cells(rows: .array(Array(repeating: [:], count: 500)), columns: columns).count == 200)
+        #expect(A2UITable.cells(rows: nil, columns: columns).isEmpty)
     }
 
     @Test func iconNamesMapToSymbols() {

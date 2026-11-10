@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>FluidStreamKit — A screen for every request you never built one for</title>
+<meta name="description" content="FluidStreamKit is an open-source Swift library for agent-built UI in iOS apps. An AI agent composes screens from your own components for requests you never built a screen for, on a streaming engine measured on device." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f7f6f1; --bg-raise: #fffefb; --surface: #ffffff; --surface-2: #efeee7;
+    --ink: #131711; --ink-2: #454b42; --ink-3: #6b7267;
+    --line: #dddcd2; --line-strong: #c6c5b8;
+    --accent: #0b6e5d; --accent-ink: #ffffff; --accent-soft: #e2efe9;
+    --amber: #a34a06; --amber-soft: #f7ead3;
+    --blue: #1d4e9e;
+    --code-bg: #101613; --code-ink: #d7e0d5; --code-dim: #8a968a; --code-key: #8fd8c8; --code-str: #e8c48a;
+    --phone-bg: #f4f4ef;
+    --shadow: 0 24px 60px -24px rgba(19, 23, 17, 0.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f0c; --bg-raise: #10150f; --surface: #141a15; --surface-2: #1a211a;
+      --ink: #edf1ea; --ink-2: #b3bcb0; --ink-3: #8a9387;
+      --line: #263027; --line-strong: #37453a;
+      --accent: #3ec6ae; --accent-ink: #06231d; --accent-soft: #123129;
+      --amber: #e8a04c; --amber-soft: #33270f;
+      --blue: #7ea8e8;
+      --code-bg: #0a0e0b;
+      --phone-bg: #10140f;
+      --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 17px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  .mono, code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 520px) { .wrap { padding: 0 16px; } }
+
+  /* header */
+  header.site { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .nav { display: flex; align-items: center; gap: 24px; height: 60px; }
+  .wordmark { font-weight: 800; font-size: 19px; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 9px; }
+  .wordmark svg { width: 22px; height: 22px; flex: none; }
+  .nav nav { display: flex; gap: 22px; margin-left: auto; }
+  .nav nav a { color: var(--ink-2); text-decoration: none; font-size: 15px; font-weight: 600; }
+  .nav nav a:hover { color: var(--ink); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15.5px; text-decoration: none; padding: 11px 20px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-primary:hover { filter: brightness(1.07); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+  .btn-ghost:hover { border-color: var(--ink-3); }
+  .nav .btn { padding: 8px 14px; font-size: 14.5px; }
+  @media (max-width: 860px) { .nav nav { display: none; } .nav .spacer { flex: 1; } .nav { gap: 10px; } }
+  @media (max-width: 460px) { .nav .btn-ghost { display: none; } }
+
+  /* hero */
+  .hero { padding: 60px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr); gap: 56px; align-items: start; }
+  @media (max-width: 940px) { .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; } .hero { padding-top: 36px; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; font-weight: 500; border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 11px; color: var(--ink-2); background: var(--bg-raise); }
+  .chip b { color: var(--accent); font-weight: 700; }
+  h1 { font-size: clamp(34px, 4.4vw, 54px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; margin: 0 0 20px; text-wrap: balance; }
+  h1 .hl { color: var(--accent); }
+  .lede { font-size: 19px; color: var(--ink-2); margin: 0 0 28px; max-width: 34em; }
+  .lede strong { color: var(--ink); }
+  .outcome { font-size: 17px; font-weight: 800; color: var(--accent); margin: -12px 0 26px; }
+  .book-btn:disabled { opacity: 0.45; cursor: default; }
+  .photo .band { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+  .feedback { font-size: 13px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 30px; }
+  .three { list-style: none; margin: 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+  .three li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; font-size: 16px; color: var(--ink-2); }
+  .three li b { color: var(--ink); }
+  .three .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 13px; display: grid; place-items: center; margin-top: 1px; }
+
+  /* phone demo */
+  .demo-col { position: sticky; top: 84px; }
+  @media (max-width: 940px) { .demo-col { position: static; } }
+  .demo-bar { display: flex; align-items: center; gap: 8px; margin: 0 auto 12px; flex-wrap: wrap; width: min(400px, 100%); }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button, .tool { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 700; padding: 7px 12px; border-radius: 7px; cursor: pointer; color: var(--ink-2); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.14); }
+  .tool { border: 1px solid var(--line-strong); background: var(--bg-raise); color: var(--ink); border-radius: 10px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .tool:hover { border-color: var(--ink-3); }
+  .tool[aria-pressed="true"] { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+  .tool:disabled { opacity: 0.45; cursor: default; }
+  .tool.right { margin-left: auto; }
+  .phone { width: min(400px, 100%); margin: 0 auto; background: var(--phone-bg); border: 1px solid var(--line-strong); border-radius: 50px; box-shadow: var(--shadow); padding: 12px 12px 18px; }
+  .phone-screen { border-radius: 40px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+  .notch { width: 110px; height: 24px; background: #0a0d0a; border-radius: 0 0 14px 14px; margin: 0 auto; }
+  .statusbar { display: flex; justify-content: space-between; padding: 6px 22px 2px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+  .appbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px 12px; border-bottom: 1px solid var(--line); }
+  .appbar .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
+  .appbar .t { font-weight: 800; font-size: 15.5px; line-height: 1.2; }
+  .appbar .s { font-size: 12px; color: var(--ink-3); font-weight: 700; }
+  .chat { padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 500px; }
+  .bubble-user { align-self: flex-end; max-width: 86%; background: var(--accent); color: var(--accent-ink); border-radius: 18px 18px 4px 18px; padding: 10px 14px; font-size: 14.5px; line-height: 1.45; font-weight: 600; }
+  .agent-text { font-size: 14.5px; line-height: 1.5; padding: 0 4px; min-height: 44px; }
+  .caret { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: -2px; margin-left: 2px; animation: blink 0.9s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .comp { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+  .comp-head { display: flex; align-items: center; gap: 7px; padding: 7px 12px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; color: var(--ink-3); border-bottom: 1px solid var(--line); background: var(--surface-2); }
+  .comp-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  .comp-head.warn { color: var(--amber); } .comp-head.warn .dot { background: var(--amber); }
+  .photo { height: 120px; background: linear-gradient(135deg, #ff8a3d, #ff3d6e 52%, #6a5cf0); position: relative; }
+  .rating { position: absolute; left: 10px; bottom: 10px; background: rgba(255,255,255,0.3); backdrop-filter: blur(6px); color: #1a0d10; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+  .stay-body { padding: 12px 14px 14px; }
+  .stay-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .stay-name { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+  .stay-price { font-weight: 700; font-size: 14px; color: var(--ink-2); white-space: nowrap; }
+  .chiprow { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 12px; }
+  .chiprow span, .chiprow button { font: inherit; font-size: 12.5px; font-weight: 700; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); padding: 5px 11px; border-radius: 999px; }
+  .chiprow button { cursor: pointer; }
+  .chiprow button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .book-btn { width: 100%; border: 0; cursor: pointer; font: inherit; font-weight: 800; font-size: 15px; background: var(--accent); color: var(--accent-ink); border-radius: 11px; padding: 12px; }
+  .book-btn.booked { background: var(--accent-soft); color: var(--accent); cursor: default; }
+  /* layout B: compact */
+  .compact { display: grid; grid-template-columns: 92px 1fr; }
+  .compact .photo { height: auto; min-height: 100%; }
+  .compact .rating { font-size: 11px; }
+  .compact .stay-top { flex-direction: column; align-items: flex-start; gap: 0; }
+  .compact .stay-price { font-size: 18px; font-weight: 800; color: var(--ink); }
+  /* fallback card */
+  .fb-title { font-weight: 800; font-size: 16px; } .fb-sub { font-size: 13px; color: var(--ink-3); font-weight: 600; margin-bottom: 12px; }
+  .plain-bubble { border: 1px solid var(--line); background: var(--surface-2); border-radius: 16px; padding: 14px; font-size: 14.5px; line-height: 1.55; }
+  .plain-bubble .fake-link { color: var(--blue); text-decoration: underline; word-break: break-all; }
+  .stream-in { animation: rise 0.45s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  .under { width: min(400px, 100%); margin: 12px auto 0; }
+  .note { font-size: 13px; font-weight: 700; color: var(--amber); background: var(--amber-soft); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+  .record { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font-size: 12px; line-height: 1.6; overflow-x: auto; }
+  .record .rh { color: var(--code-dim); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10.5px; margin-bottom: 4px; display: block; }
+  .record .k { color: var(--code-key); } .record .s { color: var(--code-str); }
+  .demo-caption { text-align: center; font-size: 13px; color: var(--ink-3); font-weight: 600; margin-top: 10px; }
+
+  /* sections */
+  section[id] { scroll-margin-top: 60px; }
+  section.block { padding: 72px 0; border-top: 1px solid var(--line); }
+  .eyebrow { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+  h2 { font-size: clamp(28px, 3.2vw, 40px); line-height: 1.1; letter-spacing: -0.025em; font-weight: 800; margin: 0 0 16px; text-wrap: balance; }
+  h3 { font-size: 20px; letter-spacing: -0.01em; font-weight: 800; margin: 0 0 8px; }
+  .sub { font-size: 18px; color: var(--ink-2); max-width: 44em; margin: 0 0 36px; }
+  .beat { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 40px; align-items: start; padding: 34px 0; border-top: 1px solid var(--line); }
+  .beat:first-of-type { border-top: 0; padding-top: 0; }
+  @media (max-width: 860px) { .beat { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+  .beat p { color: var(--ink-2); margin: 0 0 12px; }
+  .beat ul { margin: 0; padding-left: 20px; color: var(--ink-2); }
+  .beat li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-bottom: 12px; }
+  .tag.live { background: var(--accent-soft); color: var(--accent); }
+  .tag.wip { background: var(--amber-soft); color: var(--amber); }
+  .tag.plan { background: var(--surface-2); color: var(--ink-3); }
+  pre { border: 1px solid var(--line); background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 18px 20px; font-size: 13px; line-height: 1.6; overflow-x: auto; margin: 0; }
+  pre .c { color: var(--code-dim); } pre .k { color: var(--code-key); } pre .s { color: var(--code-str); }
+  .ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+  @media (max-width: 940px) { .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .ladder { grid-template-columns: minmax(0, 1fr); } }
+  .step { background: var(--bg-raise); border: 1px solid var(--line); border-radius: 16px; padding: 20px; counter-increment: step; }
+  .step::before { content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 14px; margin-bottom: 14px; }
+  .step p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+  .step .effort { display: block; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+  table.status { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+  table.status th, table.status td { text-align: left; padding: 12px 14px 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.status th { font-size: 12.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
+  table.status td:first-child { font-weight: 700; }
+  table.status .tag { margin: 0; white-space: nowrap; }
+  .table-scroll { overflow-x: auto; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 40px; align-items: start; }
+  @media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+  .bars { background: var(--bg-raise); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  .bar-row { margin-bottom: 16px; } .bar-row:last-child { margin-bottom: 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
+  .bar-track { height: 14px; border-radius: 7px; background: var(--surface-2); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 7px; }
+  .bar-fill.naive { width: 100%; background: var(--line-strong); }
+  .bar-fill.fluid { width: 1.1%; min-width: 5px; background: var(--accent); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .fact { border-top: 1px solid var(--line); padding-top: 12px; }
+  .fact .n { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; display: block; }
+  .fact .l { font-size: 13.5px; color: var(--ink-3); font-weight: 600; }
+  .fine { font-size: 14px; color: var(--ink-3); margin-top: 18px; }
+  .final { text-align: center; padding: 84px 0; border-top: 1px solid var(--line); }
+  .final .sub { margin: 0 auto 28px; }
+  .final .cta-row { justify-content: center; }
+  .spm { display: inline-block; max-width: 100%; overflow-x: auto; background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 10px 16px; font-size: 13px; white-space: nowrap; vertical-align: bottom; }
+  footer { border-top: 1px solid var(--line); padding: 26px 0 40px; font-size: 14px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+  footer a { color: var(--ink-2); }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .caret { animation: none; } .stream-in { animation: none; } }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* composed surfaces in the mock-up */
+  .reqs { display: grid; gap: 6px; width: 100%; }
+  .reqs button { text-align: left; border: 1px solid var(--line-strong); background: var(--bg-raise); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 700; padding: 8px 12px; border-radius: 10px; cursor: pointer; display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
+  .reqs button b { color: var(--ink-3); }
+  .reqs button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+  .reqs button[aria-pressed="true"] b { color: var(--accent); }
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.cmp th, table.cmp td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.cmp th { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+  table.cmp th:first-child, table.cmp td:first-child { text-align: left; white-space: normal; font-weight: 800; }
+  table.cmp tr:last-child td { border-bottom: 0; }
+  table.cmp .best { color: var(--accent); font-weight: 800; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .duo .comp { display: flex; flex-direction: column; }
+  .duo .stay-body { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 12px; }
+  .duo .stay-name { font-size: 14.5px; }
+  .duo .big { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .duo .small { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+  .duo .book-btn { margin-top: auto; padding: 9px; font-size: 13.5px; }
+  .formrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+  .stepper { display: inline-flex; align-items: center; gap: 10px; }
+  .stepper button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
+  .stepper button:disabled { opacity: 0.4; cursor: default; }
+  .stepper span { min-width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+  .field { width: 100%; font: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); color: var(--ink); margin: 10px 0; }
+  .total { display: flex; justify-content: space-between; font-weight: 800; font-size: 15px; margin: 4px 0 12px; }
+  .tree { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; }
+  .tree .rh { color: var(--code-dim); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10.5px; display: block; white-space: normal; }
+  .tree .k { color: var(--code-key); } .tree .s { color: var(--code-str); } .tree .c { color: var(--code-dim); }
+  .uses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 940px) { .uses { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .uses { grid-template-columns: minmax(0, 1fr); } }
+  .use { background: var(--bg-raise); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .use p { margin: 0 0 10px; color: var(--ink-2); font-size: 15.5px; }
+  .use .eg { font-size: 14px; color: var(--ink-3); font-style: italic; margin: 0; }
+  .use.not { background: transparent; border-style: dashed; }
+  .use.not ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 15.5px; }
+  .use.not li { margin-bottom: 4px; }
+  .two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
+  .two-col h3 { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap nav">
+    <a class="wordmark" href="#top" aria-label="FluidStreamKit home">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.7c3.2 3.9 6.3 7.7 6.3 11.3a6.3 6.3 0 1 1-12.6 0C5.7 10.4 8.8 6.6 12 2.7Z" fill="var(--accent)"/><path d="M8.6 14.2c.5 2 1.9 3.4 3.9 3.9" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round"/></svg>
+      FluidStreamKit
+    </a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#uses">Use cases</a>
+      <a href="#status">Status</a>
+      <a href="#engine">Benchmarks</a>
+    </nav>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="https://github.com/zhaziragaripolla/FluidStreamKit">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="chips" aria-label="Project facts">
+          <span class="chip"><b>v1.0.0</b> released</span>
+          <span class="chip"><b>v2</b> in preview</span>
+          <span class="chip">open source · MIT</span>
+          <span class="chip">Swift 6</span>
+          <span class="chip">iOS 17+</span>
+          <span class="chip">zero dependencies</span>
+        </div>
+        <h1>A screen for every request <span class="hl">you never built one for</span>.</h1>
+        <p class="lede">
+          Your app has screens for the things you planned. FluidStreamKit handles the things you didn't:
+          an AI agent builds the screen <strong>from your own components</strong>, for whatever the user just asked.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/zhaziragaripolla/FluidStreamKit">View on GitHub</a>
+          <a class="btn btn-ghost" href="#how">How it works</a>
+        </div>
+        <ol class="three">
+          <li><span class="num">1</span><span><b>The agent composes.</b> A comparison, a form, a confirmation: arranged for this request, not picked from a fixed list.</span></li>
+          <li><span class="num">2</span><span><b>Your components draw it.</b> The same SwiftUI views as the rest of your app, so it looks and behaves like your app.</span></li>
+          <li><span class="num">3</span><span><b>Your designed screens stay.</b> This covers the long tail around them.</span></li>
+        </ol>
+      </div>
+
+      <div class="demo-col">
+        <div class="demo-bar">
+          <div class="reqs" role="group" aria-label="Three requests in a row">
+            <button id="req0" type="button" aria-pressed="true"><b>1</b><span>Compare these three hotels on price, rating and distance to the beach.</span></button>
+            <button id="req1" type="button" aria-pressed="false"><b>2</b><span>Just the two cheapest, and add breakfast.</span></button>
+            <button id="req2" type="button" aria-pressed="false"><b>3</b><span>Book the second one.</span></button>
+          </div>
+          <div class="seg" role="group" aria-label="Answer style">
+            <button id="segNative" type="button" aria-pressed="true">Composed UI</button>
+            <button id="segPlain" type="button" aria-pressed="false">Plain text</button>
+          </div>
+          <button class="tool right" id="replayBtn" type="button" aria-label="Replay the answer">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.3M3 4v5h5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay
+          </button>
+        </div>
+
+        <div class="phone" aria-label="Mock-up of a travel app whose assistant answers three different requests with three different interfaces">
+          <div class="phone-screen">
+            <div class="notch" aria-hidden="true"></div>
+            <div class="statusbar"><span>9:41</span><span>5G</span></div>
+            <div class="appbar">
+              <div class="avatar" aria-hidden="true">W</div>
+              <div><div class="t">Wanderly</div><div class="s">Travel assistant</div></div>
+            </div>
+            <div class="chat" aria-live="polite">
+              <div class="bubble-user" id="userMsg"></div>
+              <div id="answer"></div>
+            </div>
+          </div>
+        </div>
+        <div class="under">
+          <div class="tree mono" id="tree"></div>
+          <p class="demo-caption">Concept mock-up with an invented app and scripted answers. Nobody built a screen for any of these three requests.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="eyebrow">How it works</div>
+      <h2>You build components once. The agent arranges them.</h2>
+      <p class="sub">The agent sends a description of an interface using the open A2UI format. FluidStreamKit renders it with your views as it streams in.</p>
+
+      <div class="beat">
+        <div>
+          <span class="tag live">Preview · working</span>
+          <h3>1. Register your components</h3>
+          <p>Start from the standard set (text, rows, cards, buttons, inputs) and add the views your app already has.</p>
+          <ul>
+            <li>Each component decodes its properties into your own type.</li>
+            <li>A component with a standard name replaces the standard view.</li>
+            <li>Anything unknown shows a fallback, never raw JSON.</li>
+          </ul>
+        </div>
+        <pre><span class="k">import</span> FluidStreamHostUI
+
+<span class="k">var</span> catalog = A2UICatalog.basic
+<span class="k">let</span> schema = A2UIComponentSchema(name: <span class="s">"HotelCard"</span>, version: 2)
+catalog.register(schema) { context <span class="k">in</span>
+    <span class="k">if let</span> hotel = context.props(as: Hotel.<span class="k">self</span>) {
+        HotelCard(hotel)            <span class="c">// your existing view</span>
+    }
+}</pre>
+      </div>
+
+      <div class="beat">
+        <div>
+          <span class="tag live">Preview · working</span>
+          <h3>2. Tell the agent what your app can render</h3>
+          <p>An agent can only compose from components it knows about. The catalog describes itself, so that description never drifts from your code.</p>
+          <ul>
+            <li>A manifest lists every component, its properties and its version.</li>
+            <li>One call turns it into instructions for the agent's prompt.</li>
+            <li>The agent is limited to your approved pieces. It can't invent a button.</li>
+          </ul>
+        </div>
+        <pre><span class="k">let</span> manifest = catalog.manifest(version: <span class="s">"5.0"</span>)
+
+<span class="c">// Send this to your backend, for the agent's prompt:</span>
+<span class="k">let</span> instructions = manifest.agentInstructions()
+
+<span class="c">// "Only these components exist in this app.</span>
+<span class="c">//  - HotelCard (v2)</span>
+<span class="c">//      name: string, required</span>
+<span class="c">//      price: string</span>
+<span class="c">//  - Text (v1): A run of text. ..."</span></pre>
+      </div>
+
+      <div class="beat">
+        <div>
+          <span class="tag live">Preview · working</span>
+          <h3>3. Render what it sends</h3>
+          <p>Feed the agent's bytes in as they arrive. The surface appears piece by piece, with placeholders for parts still on the way.</p>
+          <ul>
+            <li>Inputs bind to the agent's data, so a total updates as the user changes a field.</li>
+            <li>Taps come back as structured actions for you to send to the agent.</li>
+            <li>An older app version that lacks a component shows the fallback you declared.</li>
+          </ul>
+        </div>
+        <pre><span class="k">let</span> store = A2UISurfaceStore()
+<span class="k">var</span> decoder = A2UILineDecoder()
+
+<span class="c">// As the agent's response streams in:</span>
+<span class="k">for try await</span> chunk <span class="k">in</span> agentBytes {
+    store.apply(decoder.feed(chunk))
+}
+
+A2UISurfaceView(store: store, surfaceId: <span class="s">"main"</span>,
+                catalog: catalog) { action <span class="k">in</span>
+    <span class="c">// .event: send it to your agent</span>
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="uses">
+    <div class="wrap">
+      <div class="eyebrow">Use cases</div>
+      <h2>Where composing beats a fixed screen.</h2>
+      <p class="sub">It fits when the right interface depends on the request and can't be known in advance.</p>
+      <div class="uses">
+        <div class="use"><h3>Questions with no fixed shape</h3><p>A comparison, a chart with a breakdown, a ranked list. Each needs a different arrangement.</p><p class="eg">"Compare these three on battery and camera."</p></div>
+        <div class="use"><h3>Forms built as it goes</h3><p>The agent asks only what's relevant, with the right input for each question.</p><p class="eg">A return request, a claim, a booking with options.</p></div>
+        <div class="use"><h3>Results from many tools</h3><p>An assistant connected to dozens of services can show each result sensibly, without a hand-built card for every one.</p><p class="eg">A new tool is usable the day it's added.</p></div>
+        <div class="use"><h3>Step-by-step tasks</h3><p>A recipe with timers, a guide with checkboxes, a study session with a quiz.</p><p class="eg">Built for this task, then gone.</p></div>
+        <div class="use"><h3>Review before acting</h3><p>A summary of what the agent is about to do, different for every action, for the user to approve.</p><p class="eg">"Cancel this, and move $200 to savings."</p></div>
+        <div class="use not"><h3>Where a fixed screen is better</h3><ul><li>The answer always has the same shape</li><li>People use it constantly</li><li>Brand and polish matter most</li><li>The wording is regulated</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="status">
+    <div class="wrap">
+      <div class="eyebrow">Status</div>
+      <h2>What exists today, and what doesn't yet.</h2>
+      <p class="sub">This is an early open-source project. Here is where each piece stands.</p>
+      <div class="table-scroll">
+      <table class="status">
+        <thead><tr><th>Piece</th><th>Stage</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Streaming text engine</td><td><span class="tag live">Released · 1.0.0</span></td><td>Measured on device. SwiftUI and UIKit.</td></tr>
+          <tr><td>Agent-built UI (A2UI v0.9.1)</td><td><span class="tag live">Preview</span></td><td>Fourteen standard components, a table, plus your own. Not in a release yet.</td></tr>
+          <tr><td>Catalog manifest and agent instructions</td><td><span class="tag live">Preview</span></td><td>Generated from your registered components.</td></tr>
+          <tr><td>Versions and fallbacks for older builds</td><td><span class="tag live">Preview</span></td><td>Runs on the device or on a server.</td></tr>
+          <tr><td>Demo with a live model</td><td><span class="tag wip">In progress</span></td><td>The current demo app uses a scripted agent.</td></tr>
+          <tr><td>Tabs, modals, steppers, media</td><td><span class="tag plan">Planned</span></td><td>The mock-up above uses a stepper.</td></tr>
+          <tr><td>A2UI 1.0</td><td><span class="tag plan">Planned</span></td><td>When the specification is final.</td></tr>
+          <tr><td>Other platforms</td><td><span class="tag plan">Planned</span></td><td>A TypeScript core for backends, React Native and web.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="engine">
+    <div class="wrap">
+      <div class="eyebrow">The engine underneath · released</div>
+      <h2>Streaming is a frame-budget problem. We measured it.</h2>
+      <p class="sub">Long answers and arriving components both have to fit in a frame. The v1 engine buffers off the main thread and renders once per display refresh. It's useful alone, for any chat screen in Swift.</p>
+      <div class="bench">
+        <div>
+          <div class="bars" role="img" aria-label="Hitch time per second of streaming: naive SwiftUI Text 210 milliseconds per second, FluidStreamKit 2.3 milliseconds per second">
+            <div class="bar-row">
+              <div class="bar-label"><span>Naive SwiftUI <code>Text</code></span><span>210 ms/s</span></div>
+              <div class="bar-track"><div class="bar-fill naive"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>FluidStreamKit</span><span>2.3 ms/s</span></div>
+              <div class="bar-track"><div class="bar-fill fluid"></div></div>
+            </div>
+          </div>
+          <p class="fine">Hitch time per second of streaming, lower is better, median of 3 runs. Measured with Instruments on one device: iPhone 16 Pro, iOS 26.6.1, 120 Hz, Release build, 6,000 tokens at 150 tok/s with jitter. The harness is open in <a href="https://github.com/zhaziragaripolla/FluidStreamBench">FluidStreamBench</a>, so you can run it yourself.</p>
+        </div>
+        <div class="facts">
+          <div class="fact"><span class="n">4–14</span><span class="l">hitches per run, vs 435–458</span></div>
+          <div class="fact"><span class="n">0</span><span class="l">potential hangs, vs 6–22</span></div>
+          <div class="fact"><span class="n">5.9 ms</span><span class="l">median main-thread time per update</span></div>
+          <div class="fact"><span class="n">8.0 ms</span><span class="l">p99, inside the 8.33 ms budget</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final" id="start">
+    <div class="wrap">
+      <div class="eyebrow">Get started</div>
+      <h2>Try it in your app.</h2>
+      <p class="sub">The streaming engine is released. Agent-built UI is in preview, and feedback on it is welcome in the issues.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/zhaziragaripolla/FluidStreamKit">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/zhaziragaripolla/FluidStreamKit/issues">Open an issue</a>
+      </div>
+      <code class="spm">.package(url: "https://github.com/zhaziragaripolla/FluidStreamKit", from: "1.0.0")</code>
+    </div>
+  </section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <span>FluidStreamKit · MIT · Swift 6 · iOS 17+</span>
+    <span><a href="https://github.com/zhaziragaripolla/FluidStreamKit">GitHub</a> · <a href="https://github.com/zhaziragaripolla/FluidStreamBench">Benchmarks</a> · <a href="#status">Status</a></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function (id) { return document.getElementById(id); };
+  var answer = $("answer"), tree = $("tree");
+  var HOTELS = [
+    { name: "Alfama River Suite", price: 148, rating: "4.9", beach: "6.1 km" },
+    { name: "Baixa Loft", price: 112, rating: "4.6", beach: "5.4 km" },
+    { name: "Cascais Garden", price: 96, rating: "4.4", beach: "0.3 km" }
+  ];
+  var BREAKFAST = 12;
+  var state = { req: 0, mode: "native", run: 0, nights: 2, breakfast: true, name: "", booked: false };
+
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function comp(head) {
+    var c = el("div", "comp stream-in");
+    c.appendChild(el("div", "comp-head", '<span class="dot"></span>' + head));
+    return c;
+  }
+
+  var REQS = [
+    {
+      text: "Compare these three hotels on price, rating and distance to the beach.",
+      intro: "Here they are side by side. Cascais Garden is cheapest and closest to the beach.",
+      plain: "Alfama River Suite is €148 a night, rated 4.9, and 6.1 km from the beach. Baixa Loft is €112, rated 4.6, 5.4 km away. Cascais Garden is €96, rated 4.4, and 0.3 km from the beach. Cascais Garden is the cheapest and the closest.",
+      tree: '<span class="k">Column</span>\n ├ <span class="k">Text</span>\n └ <span class="k">Table</span>  <span class="c">3 rows from /hotels</span>',
+      build: function () {
+        var c = comp("Table · rows from the agent's data");
+        var rows = HOTELS.map(function (h, i) {
+          return "<tr><td>" + h.name + "</td><td" + (i === 2 ? ' class="best"' : "") + ">€" + h.price + "</td><td" + (i === 0 ? ' class="best"' : "") + ">★ " + h.rating + "</td><td" + (i === 2 ? ' class="best"' : "") + ">" + h.beach + "</td></tr>";
+        }).join("");
+        c.appendChild(el("table", "cmp", "<thead><tr><th>Hotel</th><th>Night</th><th>Rating</th><th>Beach</th></tr></thead><tbody>" + rows + "</tbody>"));
+        return c;
+      }
+    },
+    {
+      text: "Just the two cheapest, and add breakfast.",
+      intro: "With breakfast included, per night:",
+      plain: "With breakfast (€12 a night), Cascais Garden comes to €108 a night and Baixa Loft to €124 a night. Tell me which one you'd like and for how many nights.",
+      tree: '<span class="k">Column</span>\n ├ <span class="k">Text</span>\n └ <span class="k">Row</span>\n    ├ <span class="k">HotelCard</span>  <span class="c">your component</span>\n    └ <span class="k">HotelCard</span>',
+      build: function () {
+        var row = el("div", "duo stream-in");
+        [HOTELS[2], HOTELS[1]].forEach(function (h) {
+          var c = el("div", "comp");
+          c.appendChild(el("div", "comp-head", '<span class="dot"></span>HotelCard'));
+          var b = el("div", "stay-body");
+          b.appendChild(el("div", "stay-name", h.name));
+          b.appendChild(el("div", "big", "€" + (h.price + BREAKFAST)));
+          b.appendChild(el("div", "small", "per night, breakfast included · ★ " + h.rating));
+          var pick = el("button", "book-btn", "Choose");
+          pick.type = "button";
+          pick.addEventListener("click", function () { select(2); });
+          b.appendChild(pick);
+          c.appendChild(b);
+          row.appendChild(c);
+        });
+        return row;
+      }
+    },
+    {
+      text: "Book the second one.",
+      intro: "Baixa Loft. I just need a few details.",
+      plain: "Sure, Baixa Loft. How many nights would you like? Do you still want breakfast? And what name should the booking be under? Reply with all three and I'll confirm the total.",
+      tree: '<span class="k">Card</span>\n └ <span class="k">Column</span>\n    ├ <span class="k">Text</span>\n    ├ <span class="k">Stepper</span>     <span class="c">bound to /form/nights</span>\n    ├ <span class="k">CheckBox</span>    <span class="c">bound to /form/breakfast</span>\n    ├ <span class="k">TextField</span>   <span class="c">bound to /form/name</span>\n    ├ <span class="k">Text</span>        <span class="c">total, updates live</span>\n    └ <span class="k">Button</span>      <span class="c">action: book</span>',
+      build: function () { return bookingForm(true); }
+    }
+  ];
+
+  function bookingForm(animate) {
+    var h = HOTELS[1];
+    var c = el("div", "comp" + (animate ? " stream-in" : ""));
+    c.appendChild(el("div", "comp-head", '<span class="dot"></span>Card · form built for this request'));
+    var b = el("div", "stay-body");
+    b.appendChild(el("div", "stay-name", h.name));
+
+    var nights = el("div", "formrow", "<span>Nights</span>");
+    var stepper = el("span", "stepper");
+    var minus = el("button", "", "−"), count = el("span", "", String(state.nights)), plus = el("button", "", "+");
+    minus.type = plus.type = "button";
+    minus.setAttribute("aria-label", "Fewer nights"); plus.setAttribute("aria-label", "More nights");
+    minus.disabled = state.booked || state.nights <= 1; plus.disabled = state.booked || state.nights >= 9;
+    minus.addEventListener("click", function () { state.nights--; redrawForm(); });
+    plus.addEventListener("click", function () { state.nights++; redrawForm(); });
+    stepper.appendChild(minus); stepper.appendChild(count); stepper.appendChild(plus);
+    nights.appendChild(stepper);
+    b.appendChild(nights);
+
+    var bf = el("div", "formrow", "<span>Breakfast, €" + BREAKFAST + " a night</span>");
+    var chips = el("span", "chiprow"); chips.style.margin = "0";
+    var toggle = el("button", "", state.breakfast ? "Included" : "Add");
+    toggle.type = "button"; toggle.disabled = state.booked;
+    toggle.setAttribute("aria-pressed", String(state.breakfast));
+    toggle.addEventListener("click", function () { state.breakfast = !state.breakfast; redrawForm(); });
+    chips.appendChild(toggle); bf.appendChild(chips);
+    b.appendChild(bf);
+
+    var name = el("input", "field");
+    name.type = "text"; name.placeholder = "Name on booking"; name.value = state.name; name.disabled = state.booked;
+    name.setAttribute("aria-label", "Name on booking");
+    name.addEventListener("input", function () { state.name = name.value; });
+    b.appendChild(name);
+
+    var total = state.nights * (h.price + (state.breakfast ? BREAKFAST : 0));
+    b.appendChild(el("div", "total", "<span>Total</span><span>€" + total + "</span>"));
+    var book = el("button", "book-btn" + (state.booked ? " booked" : ""), state.booked ? "✓ Booked · " + state.nights + (state.nights === 1 ? " night" : " nights") + " · €" + total : "Confirm booking");
+    book.type = "button";
+    book.addEventListener("click", function () { if (!state.booked) { state.booked = true; redrawForm(); } });
+    b.appendChild(book);
+    c.appendChild(b);
+    return c;
+  }
+  function redrawForm() {
+    var old = answer.querySelector(".comp");
+    if (old) answer.replaceChild(bookingForm(false), old);
+  }
+
+  function play() {
+    var run = ++state.run, r = REQS[state.req];
+    state.booked = false;
+    answer.innerHTML = "";
+    $("userMsg").textContent = r.text;
+    if (state.mode === "plain") {
+      answer.appendChild(el("div", "plain-bubble stream-in", r.plain));
+      tree.innerHTML = '<span class="rh">What the agent sent</span><span class="c">Text only. The user reads it, then types a reply.</span>';
+      return;
+    }
+    tree.innerHTML = '<span class="rh">What the agent composed, from your catalog</span>' + r.tree;
+    var text = el("div", "agent-text"), span = el("span"), caret = el("span", "caret");
+    caret.setAttribute("aria-hidden", "true");
+    text.appendChild(span); text.appendChild(caret);
+    answer.appendChild(text);
+    var finish = function () { caret.remove(); answer.appendChild(r.build()); };
+    if (reduced) { span.textContent = r.intro; finish(); return; }
+    var words = r.intro.split(" "), i = 0;
+    (function tick() {
+      if (run !== state.run) return;
+      if (i < words.length) { span.textContent += (i ? " " : "") + words[i++]; setTimeout(tick, 45); }
+      else { setTimeout(function () { if (run === state.run) finish(); }, 200); }
+    })();
+  }
+
+  function select(index) {
+    state.req = index;
+    for (var i = 0; i < REQS.length; i++) $("req" + i).setAttribute("aria-pressed", String(i === index));
+    play();
+  }
+  [0, 1, 2].forEach(function (i) { $("req" + i).addEventListener("click", function () { select(i); }); });
+  function press(on, off) { on.setAttribute("aria-pressed", "true"); off.setAttribute("aria-pressed", "false"); }
+  $("segNative").addEventListener("click", function () { state.mode = "native"; press($("segNative"), $("segPlain")); play(); });
+  $("segPlain").addEventListener("click", function () { state.mode = "plain"; press($("segPlain"), $("segNative")); play(); });
+  $("replayBtn").addEventListener("click", play);
+  select(0);
+})();
+</script>
+</body>
+</html>
