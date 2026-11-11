@@ -21,6 +21,10 @@ let package = Package(
         .library(name: "FluidStreamCore", targets: ["FluidStreamCore"]),
         .library(name: "FluidStreamParser", targets: ["FluidStreamParser"]),
         .library(name: "FluidStreamUI", targets: ["FluidStreamUI"]),
+        // v2 GenUI host (RFC-005): A2UI protocol and surface state, no UI.
+        .library(name: "FluidStreamHost", targets: ["FluidStreamHost"]),
+        // SwiftUI rendering for the host: the basic catalog plus your own components.
+        .library(name: "FluidStreamHostUI", targets: ["FluidStreamHostUI"]),
     ],
     // No dependencies, by design. The benchmark harness lives in the separate FluidStreamBench
     // package, so comparisons against other libraries never add dependencies here.
@@ -39,6 +43,23 @@ let package = Package(
         .target(
             name: "FluidStreamUI",
             dependencies: ["FluidStreamCore", "FluidStreamParser"],
+            swiftSettings: strictSettings
+        ),
+        // Foundation and Observation only, so the A2UI state model is tested on the Mac.
+        .target(
+            name: "FluidStreamHost",
+            swiftSettings: strictSettings
+        ),
+        .target(
+            name: "FluidStreamHostUI",
+            dependencies: ["FluidStreamHost"],
+            swiftSettings: strictSettings
+        ),
+        .testTarget(
+            name: "FluidStreamHostTests",
+            dependencies: ["FluidStreamHost", "FluidStreamHostUI"],
+            // Google's official A2UI 1.0 examples (Apache-2.0), for the conformance tests.
+            resources: [.copy("Fixtures")],
             swiftSettings: strictSettings
         ),
         .testTarget(

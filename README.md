@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/zhaziragaripolla/FluidStreamKit/actions/workflows/ci.yml/badge.svg)](https://github.com/zhaziragaripolla/FluidStreamKit/actions/workflows/ci.yml)
 
-Render streaming LLM responses on iOS at 80–150+ tokens per second, at 120 Hz with near-zero dropped frames.
+A high-performance Swift 6 native host engine for high-velocity text and declarative agentic streams.
 
 `FluidStreamKit` sits between your network stream and the screen:
 - It buffers bursty token deltas and flushes them **once per display frame**, in sync with `CADisplayLink`.
