@@ -5,15 +5,30 @@ All notable changes to FluidStreamKit. The format follows [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Added
-- `FluidStreamHost` (v2, in progress, RFC-005): A2UI v0.9.1 message decoding, a JSONL line decoder, per-surface component and data-model state with JSON Pointer bindings, a resolved component tree (pending children, templates, cycle and size limits), input write-back and action messages.
+- **A2UI 1.0** (RFC-007). The host speaks 1.0 natively and upgrades v0.9 messages as it decodes them:
+  - `@path` and `@call` bindings, `@accessibility`, `@checks`, `@catalogId` and `@metadata`;
+  - `createSurface` with inline components and data, and `updateDataModel` where `null` deletes;
+  - function calls in both directions (`callRendererFunction`, `callAgentFunction` and their responses), with `allowedCallers` and `requiresUserActivation` enforced;
+  - all 14 basic-catalog functions, including `formatString` with nested calls, and a regex dialect that rejects unsafe patterns;
+  - `@checks` validation: failing checks disable a Button and show messages under inputs;
+  - mixed catalogs resolved per component, `allowedParents` and `allowedChildren`, 1.0 catalog definitions, and renderer capabilities;
+  - renderer error messages, such as `INTEGRITY_ERROR` for a duplicate surface;
+  - `@accessibility` mapped to VoiceOver, and Markdown headings in Text.
+- Tabs, Modal, Video and AudioPlayer, so the basic catalog renders all 18 components natively.
+- A conformance suite that runs Google's 43 official A2UI 1.0 examples end to end.
+- `FluidStreamHost` (v2, in progress, RFC-005): A2UI message decoding, a JSONL line decoder, per-surface component and data-model state with JSON Pointer bindings, a resolved component tree (pending children, templates, cycle and size limits), input write-back and action messages.
 - `FluidStreamHostUI` (v2, in progress): `A2UISurfaceView` and `A2UICatalog`, with native SwiftUI views for Text, Image, Icon, Row, Column, List, Card, Divider, Button, TextField, CheckBox and Slider. Apps add or replace components with `register(_:)`, and media URLs are filtered to http, https and data.
 - Catalog schemas, versioning and fallbacks (RFC-006):
   - `A2UIComponentSchema` and `A2UICatalogManifest` describe what a build can render, as JSON, with `agentInstructions()` for the agent's prompt;
   - `A2UIDowncompiler` rewrites unknown or too-new components into their declared fallbacks and reports each substitution;
-  - components can ask for a version with `minVersion` and name an inline `fallback`;
+  - components can ask for a version and name an inline fallback (in `@metadata.extensions` under A2UI 1.0);
   - `A2UICatalog.register(_ schema:)` and `manifest(version:)`.
 - `ChoicePicker` and `DateTimeInput` in the basic catalog, and `A2UICatalog.fluid`, which adds a data-driven `Table` under its own catalog id.
 - `Examples/GenUIDemo`: a scripted agent streaming a surface, with a custom component and a booking round trip.
+
+### Changed
+- `A2UIMessage.createSurface` takes an `A2UISurfaceDefinition`, `updateDataModel` takes a non-optional value, and `A2UIAction` adds `callAgentFunction` and `error`. `A2UISurfaceView` takes `catalogs:`, and `clientCapabilities` is now `rendererCapabilities`.
+- `A2UICatalog.basic` uses the 1.0 basic catalog id and still answers to the v0.9 ids.
 
 ### Fixed
 - Input bindings read live from the store, so a control can't snap back to stale data.

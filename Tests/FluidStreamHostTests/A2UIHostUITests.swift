@@ -34,19 +34,22 @@ struct CatalogTests {
 
     func context(_ component: A2UIComponent, data: JSONValue = [:]) throws -> (A2UIComponentContext, A2UISurfaceStore) {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [component]))
         store.apply(.updateDataModel(surfaceId: "s", path: "/", value: data))
         let surface = try #require(store.surfaces["s"])
         let node = try #require(surface.resolvedTree())
-        let env = A2UIRenderEnvironment(store: store, surfaceId: "s", catalog: .basic, baseURL: nil, onAction: { _ in })
+        let env = A2UIRenderEnvironment(store: store, surfaceId: "s", catalogs: [.basic], baseURL: nil, onAction: { _ in })
         return (A2UIComponentContext(node: node, component: component, surface: surface, environment: env), store)
     }
 
-    @Test func basicCatalogCoversTheFirstSlice() {
-        let expected: Set = ["Text", "Image", "Icon", "Row", "Column", "List", "Card", "Divider",
-                             "Button", "TextField", "CheckBox", "Slider", "ChoicePicker", "DateTimeInput"]
+    @Test func basicCatalogCoversAllOfA2UI10() {
+        let expected: Set = ["Text", "Image", "Icon", "Video", "AudioPlayer", "Row", "Column", "List", "Card",
+                             "Tabs", "Modal", "Divider", "Button", "TextField", "CheckBox", "ChoicePicker",
+                             "Slider", "DateTimeInput"]
         #expect(A2UICatalog.basic.componentTypes == expected)
+        #expect(A2UICatalog.basic.id == A2UIVersion.basicCatalogID)
+        #expect(A2UICatalog.basic.answers(to: "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"))
     }
 
     @Test func registerAddsAndOverrides() {
@@ -60,7 +63,7 @@ struct CatalogTests {
 
     @Test func propsDecodeWithBindingsResolved() throws {
         let (ctx, _) = try context(
-            A2UIComponent(id: "root", type: "ProductCard", properties: ["title": ["path": "/p/title"], "price": 148]),
+            A2UIComponent(id: "root", type: "ProductCard", properties: ["title": ["@path": "/p/title"], "price": 148]),
             data: ["p": ["title": "River Suite"]])
         #expect(ctx.props(as: Product.self) == Product(id: "root", title: "River Suite", price: 148))
         #expect(ctx.string("title") == "River Suite")
@@ -68,7 +71,7 @@ struct CatalogTests {
 
     @Test func inputWritesGoToTheBoundPathOnly() throws {
         let (bound, store) = try context(
-            A2UIComponent(id: "root", type: "CheckBox", properties: ["label": "Agree", "value": ["path": "/form/agreed"]]))
+            A2UIComponent(id: "root", type: "CheckBox", properties: ["label": "Agree", "value": ["@path": "/form/agreed"]]))
         let toggle = bound.binding("value", default: false, get: { $0.boolValue }, set: { .bool($0) })
         #expect(toggle.wrappedValue == false)
         toggle.wrappedValue = true
@@ -82,7 +85,7 @@ struct CatalogTests {
 
     @Test func bindingsReadLiveFromTheStore() throws {
         let (ctx, store) = try context(
-            A2UIComponent(id: "root", type: "TextField", properties: ["value": ["path": "/name"]]),
+            A2UIComponent(id: "root", type: "TextField", properties: ["value": ["@path": "/name"]]),
             data: ["name": "Alex"])
         // A control can keep a binding made in an earlier render; it must still see new data.
         let text = ctx.binding("value", default: "", get: { $0.stringValue }, set: { .string($0) })
@@ -120,7 +123,7 @@ struct CatalogTests {
         let (ctx, _) = try context(
             A2UIComponent(id: "root", type: "Table", properties: [
                 "columns": [["title": "Hotel", "path": "name"], ["title": "Night", "path": "price/amount", "align": "end"], ["path": "missing"]],
-                "rows": ["path": "/hotels"],
+                "rows": ["@path": "/hotels"],
             ]),
             data: ["hotels": [["name": "Baixa Loft", "price": ["amount": 112]], ["name": "Cascais Garden", "price": ["amount": 96]]]])
         let columns = A2UITable.columns(from: ctx.value("columns"))
@@ -133,6 +136,7 @@ struct CatalogTests {
 
     @Test func iconNamesMapToSymbols() {
         #expect(A2UIIconView.symbol(for: "check") == "checkmark")
+        #expect(A2UIIconView.symbol(for: "payment") == "creditcard")
         #expect(A2UIIconView.symbol(for: "star.fill") == "star.fill")
     }
 }

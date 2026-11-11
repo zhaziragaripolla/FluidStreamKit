@@ -57,7 +57,8 @@ struct CatalogManifestTests {
         #expect(text.contains("- HotelCard (v3): A bookable stay."))
         #expect(text.contains("    name: string, required"))
         for schema in newest.components { #expect(text.contains("- \(schema.name) (v")) }
-        #expect(newest.clientCapabilities == ["v0.9.1": ["supportedCatalogIds": ["app"]]])
+        #expect(newest.rendererCapabilities == ["1.0": ["supportedCatalogIds": ["app"]]])
+        #expect(text.contains(#"{"@path": "/pointer"}"#))
     }
 }
 
@@ -78,14 +79,14 @@ struct DowncompilerTests {
 
     @Test func tooNewComponentBecomesItsDeclaredFallback() {
         let card = A2UIComponent(id: "stay", type: "HotelCard", properties: [
-            "minVersion": 3, "name": ["path": "/stay/name"], "price": "€148", "photos": ["a.jpg"],
+            "minVersion": 3, "name": ["@path": "/stay/name"], "price": "€148", "photos": ["a.jpg"],
         ])
         let result = compiler.downcompile([card])
         #expect(result.components == [
             A2UIComponent(id: "stay", type: "Card", properties: ["child": "stay~body"]),
             A2UIComponent(id: "stay~body", type: "Column", properties: ["children": ["stay~title", "stay~price"]]),
             // The data binding is carried over, so the fallback still updates live.
-            A2UIComponent(id: "stay~title", type: "Text", properties: ["variant": "h4", "text": ["path": "/stay/name"]]),
+            A2UIComponent(id: "stay~title", type: "Text", properties: ["variant": "h4", "text": ["@path": "/stay/name"]]),
             A2UIComponent(id: "stay~price", type: "Text", properties: ["variant": "caption", "text": "€148"]),
         ])
         #expect(result.substitutions == [.init(
@@ -161,7 +162,7 @@ struct CatalogSchemaTests {
 
     @Test func inlineFallbackResolvesBesideChildren() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "FlightCard", properties: ["child": "inner", "fallback": "plain"]),
             A2UIComponent(id: "plain", type: "Text", properties: ["text": "LIS → OPO"]),

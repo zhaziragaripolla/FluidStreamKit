@@ -51,14 +51,21 @@ public struct A2UIComponentSchema: Sendable, Hashable, Codable {
     public var description: String?
     public var properties: [Property]
     public var fallback: Fallback?
+    /// Component types this one may sit inside (`"Surface"` for the top level), or nil for any.
+    public var allowedParents: [String]?
+    /// Component types this one may contain, or nil for any.
+    public var allowedChildren: [String]?
 
     public init(name: String, version: Int = 1, description: String? = nil,
-                properties: [Property] = [], fallback: Fallback? = nil) {
+                properties: [Property] = [], fallback: Fallback? = nil,
+                allowedParents: [String]? = nil, allowedChildren: [String]? = nil) {
         self.name = name
         self.version = version
         self.description = description
         self.properties = properties
         self.fallback = fallback
+        self.allowedParents = allowedParents
+        self.allowedChildren = allowedChildren
     }
 
     public init(from decoder: any Decoder) throws {
@@ -68,13 +75,49 @@ public struct A2UIComponentSchema: Sendable, Hashable, Codable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         properties = try c.decodeIfPresent([Property].self, forKey: .properties) ?? []
         fallback = try c.decodeIfPresent(Fallback.self, forKey: .fallback)
+        allowedParents = try c.decodeIfPresent([String].self, forKey: .allowedParents)
+        allowedChildren = try c.decodeIfPresent([String].self, forKey: .allowedChildren)
+    }
+
+    /// The component in A2UI 1.0 catalog form: a flat object schema whose `component` is a
+    /// constant, with properties typed by the common A2UI types.
+    public var catalogJSON: JSONValue {
+        var props: [String: JSONValue] = ["component": ["const": .string(name)]]
+        for p in properties {
+            var schema: [String: JSONValue]
+            switch p.type {
+            case .string: schema = ["$ref": "common_types.json#/$defs/DynamicString"]
+            case .number: schema = ["$ref": "common_types.json#/$defs/DynamicNumber"]
+            case .boolean: schema = ["$ref": "common_types.json#/$defs/DynamicBoolean"]
+            case .array: schema = ["type": "array"]
+            case .object: schema = ["type": "object"]
+            case .any: schema = ["$ref": "common_types.json#/$defs/DynamicValue"]
+            case .component: schema = ["$ref": "common_types.json#/$defs/Child"]
+            case .componentList: schema = ["$ref": "common_types.json#/$defs/ChildList"]
+            case .action: schema = ["$ref": "common_types.json#/$defs/Action"]
+            }
+            if let d = p.description { schema["description"] = .string(d) }
+            props[p.name] = .object(schema)
+        }
+        var o: [String: JSONValue] = [
+            "type": "object",
+            "properties": .object(props),
+            "required": .array((["component"] + properties.filter(\.required).map(\.name)).map(JSONValue.string)),
+        ]
+        if let description { o["description"] = .string(description) }
+        if let allowedParents { o["allowedParents"] = .array(allowedParents.map(JSONValue.string)) }
+        if let allowedChildren { o["allowedChildren"] = .array(allowedChildren.map(JSONValue.string)) }
+        if version > 1 { o["metadata"] = ["extensions": .object([A2UIExtensionKey.componentVersion: .number(Double(version))])] }
+        return .object(o)
     }
 }
 
 extension A2UIComponent {
-    /// The component version the agent asked for with `"minVersion"`. Defaults to 1.
+    /// The component version the agent asked for, in `@metadata.extensions.fluid_minVersion`
+    /// (or a plain `minVersion` property). Defaults to 1.
     public var minimumVersion: Int {
-        guard let n = properties["minVersion"]?.doubleValue, n >= 1, n < 1_000_000 else { return 1 }
+        let raw = extensions[A2UIExtensionKey.minVersion] ?? properties["minVersion"]
+        guard let n = raw?.doubleValue, n >= 1, n < 1_000_000 else { return 1 }
         return Int(n)
     }
 }
@@ -112,9 +155,51 @@ public struct A2UICatalogManifest: Sendable, Hashable, Codable {
         try JSONDecoder().decode(A2UICatalogManifest.self, from: data)
     }
 
-    /// The `a2uiClientCapabilities` value a client sends with its requests.
-    public var clientCapabilities: JSONValue {
-        .object([A2UIVersion.current: ["supportedCatalogIds": [.string(catalogId)]]])
+    /// The `a2uiRendererCapabilities` value a renderer sends with its requests.
+    public var rendererCapabilities: JSONValue {
+        A2UICatalogManifest.rendererCapabilities(supporting: [self])
+    }
+
+    /// Capabilities for several catalogs, which A2UI 1.0 lets an agent mix in one surface.
+    /// Pass `inline: true` only when the agent accepts inline catalogs.
+    public static func rendererCapabilities(supporting manifests: [A2UICatalogManifest], inline: Bool = false,
+                                            functions: A2UIFunctionRegistry? = nil) -> JSONValue {
+        var caps: [String: JSONValue] = ["supportedCatalogIds": .array(manifests.map { .string($0.catalogId) })]
+        if inline { caps["inlineCatalogs"] = .array(manifests.map { $0.catalogDefinition(functions: functions) }) }
+        return .object([A2UIVersion.current: .object(caps)])
+    }
+
+    /// The catalog as an A2UI 1.0 catalog definition, for `inlineCatalogs` or for publishing.
+    public func catalogDefinition(functions: A2UIFunctionRegistry? = nil, instructions: String? = nil) -> JSONValue {
+        let defs: [String: JSONValue] = [
+            "anyComponent": ["oneOf": .array(components.map { .object(["$ref": .string("#/components/\($0.name)")]) }),
+                             "discriminator": ["propertyName": "component"]],
+            "anyFunction": ["oneOf": .array((functions?.definitions.keys.sorted() ?? []).map { .object(["$ref": .string("#/functions/\($0)")]) })],
+        ]
+        var o: [String: JSONValue] = [
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": .string(catalogId),
+            "catalogId": .string(catalogId),
+            "protocolVersion": .string(A2UIVersion.current),
+            "title": .string("Catalog \(version)"),
+            "components": .object(Dictionary(uniqueKeysWithValues: components.map { ($0.name, $0.catalogJSON) })),
+            "$defs": .object(defs),
+        ]
+        if let functions, !functions.definitions.isEmpty {
+            o["functions"] = .object(functions.definitions.mapValues(\.catalogJSON))
+        }
+        if let instructions { o["instructions"] = .string(instructions) }
+        return .object(o)
+    }
+
+    /// Composition rules (`allowedParents`, `allowedChildren`) for building a surface's tree.
+    public var compositionRules: A2UISurface.CompositionRules {
+        var rules = A2UISurface.CompositionRules()
+        for c in components {
+            if let p = c.allowedParents { rules.allowedParents[c.name] = Set(p) }
+            if let ch = c.allowedChildren { rules.allowedChildren[c.name] = Set(ch) }
+        }
+        return rules
     }
 
     /// A plain-text description for the agent's prompt: which components it may send and with
@@ -123,6 +208,7 @@ public struct A2UICatalogManifest: Sendable, Hashable, Codable {
         var lines = [
             "You can show UI with A2UI \(A2UIVersion.current). Use catalogId \"\(catalogId)\" (version \(version)).",
             "Only these components exist in this app. Never send any other component type.",
+            "Bind a property to data with {\"@path\": \"/pointer\"}. Call a function with {\"@call\": \"name\", \"args\": {…}}.",
             "",
         ]
         for schema in components {
@@ -144,8 +230,8 @@ extension A2UIComponentSchema {
     /// Schemas for the basic-catalog components this package renders today.
     public static let basicSubset: [A2UIComponentSchema] = [
         .init(name: "Text", description: "A run of text. Supports simple Markdown.", properties: [
-            .init("text", .string, required: true, "Literal, or {\"path\": \"/pointer\"}"),
-            .init("variant", .string, "h1, h2, h3, h4, h5, caption or body"),
+            .init("text", .string, required: true, "Literal, {\"@path\": \"/pointer\"}, or formatString. Markdown, including # headings"),
+            .init("variant", .string, "caption or body"),
         ]),
         .init(name: "Image", properties: [
             .init("url", .string, required: true, "http, https or data URL"),
@@ -165,7 +251,7 @@ extension A2UIComponentSchema {
             .init("align", .string, "start, center or end"),
         ]),
         .init(name: "List", description: "A list, often from a template over a data array.", properties: [
-            .init("children", .componentList, required: true, "Ids, or {\"componentId\", \"path\"}"),
+            .init("children", .componentList, required: true, "Ids, or a template {\"componentId\", \"path\"}"),
             .init("direction", .string, "vertical or horizontal"),
         ]),
         .init(name: "Card", properties: [.init("child", .component, required: true)]),
@@ -173,36 +259,55 @@ extension A2UIComponentSchema {
         .init(name: "Button", properties: [
             .init("child", .component, required: true, "Usually a Text"),
             .init("variant", .string, "default, primary or borderless"),
-            .init("action", .action, required: true, "{\"event\": {\"name\", \"context\"}}"),
+            .init("action", .action, required: true, "{\"event\": {\"name\", \"context\"}} or {\"functionCall\": {…}}"),
         ]),
         .init(name: "TextField", properties: [
             .init("label", .string),
-            .init("value", .string, "Bind with {\"path\"} to receive what the user types"),
+            .init("value", .string, required: true, "Bind with {\"@path\"} to receive what the user types"),
+            .init("placeholder", .string),
             .init("variant", .string, "shortText, longText, number or obscured"),
         ]),
         .init(name: "CheckBox", properties: [
             .init("label", .string, required: true),
-            .init("value", .boolean, "Bind with {\"path\"}"),
+            .init("value", .boolean, "Bind with {\"@path\"}"),
         ]),
         .init(name: "ChoicePicker", description: "Pick one or several options.", properties: [
             .init("options", .array, required: true, "[{\"label\": \"Email\", \"value\": \"email\"}]"),
-            .init("value", .array, "Selected values. Bind with {\"path\"}"),
-            .init("variant", .string, "mutuallyExclusive for a single choice"),
+            .init("value", .array, "Selected values. Bind with {\"@path\"}"),
+            .init("variant", .string, "mutuallyExclusive (default) or multipleSelection"),
+            .init("displayStyle", .string, "checkbox (default) or chips"),
+            .init("filterable", .boolean),
             .init("label", .string),
         ]),
         .init(name: "DateTimeInput", properties: [
-            .init("value", .string, "ISO 8601. Bind with {\"path\"}"),
+            .init("value", .string, "ISO 8601. Bind with {\"@path\"}"),
             .init("label", .string),
-            .init("enableDate", .boolean, "Default true"),
+            .init("enableDate", .boolean),
             .init("enableTime", .boolean, "Default false"),
             .init("min", .string, "ISO 8601"),
             .init("max", .string, "ISO 8601"),
         ]),
         .init(name: "Slider", properties: [
             .init("label", .string),
-            .init("value", .number, "Bind with {\"path\"}"),
+            .init("value", .number, "Bind with {\"@path\"}"),
             .init("min", .number),
-            .init("max", .number),
+            .init("max", .number, required: true),
+            .init("steps", .number, "Number of discrete steps"),
+        ]),
+        .init(name: "Tabs", properties: [
+            .init("tabs", .array, required: true, "[{\"title\": \"Details\", \"child\": \"details\"}]"),
+        ]),
+        .init(name: "Modal", description: "Shows content in a sheet when the trigger is tapped.", properties: [
+            .init("trigger", .component, required: true),
+            .init("content", .component, required: true),
+        ]),
+        .init(name: "Video", properties: [
+            .init("url", .string, required: true),
+            .init("posterUrl", .string),
+        ]),
+        .init(name: "AudioPlayer", properties: [
+            .init("url", .string, required: true),
+            .init("description", .string),
         ]),
     ]
 }

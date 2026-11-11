@@ -58,6 +58,8 @@ let package = Package(
         .testTarget(
             name: "FluidStreamHostTests",
             dependencies: ["FluidStreamHost", "FluidStreamHostUI"],
+            // Google's official A2UI 1.0 examples (Apache-2.0), for the conformance tests.
+            resources: [.copy("Fixtures")],
             swiftSettings: strictSettings
         ),
         .testTarget(

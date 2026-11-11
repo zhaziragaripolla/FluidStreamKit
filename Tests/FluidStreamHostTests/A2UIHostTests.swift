@@ -2,8 +2,15 @@ import Foundation
 import Testing
 @testable import FluidStreamHost
 
-// Payloads below are the A2UI v0.9.1 examples from a2ui.org (messages reference, data binding
-// and actions pages), so these double as the start of the conformance suite.
+// `profileStream` is the A2UI v0.9.1 example from a2ui.org, kept to test the upgrade of legacy
+// messages. The official 1.0 examples are checked in ConformanceTests.
+
+extension A2UIMessage {
+    /// A plain 1.0 `createSurface`.
+    static func create(_ id: String, catalog: String? = "c") -> A2UIMessage {
+        .createSurface(A2UISurfaceDefinition(surfaceId: id, catalogId: catalog))
+    }
+}
 
 let profileStream = """
 {"version": "v0.9.1", "createSurface": {"surfaceId": "user_profile_card", "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json", "theme": {"primaryColor": "#00BFFF"}, "sendDataModel": true}}
@@ -89,7 +96,7 @@ struct JSONPointerTests {
 struct MessageDecodingTests {
     @Test func decodesAllFourMessages() throws {
         let create = try A2UIMessage.decode(line: Data(#"{"version": "v0.9", "createSurface": {"surfaceId": "main", "catalogId": "c"}}"#.utf8))
-        #expect(create == .createSurface(surfaceId: "main", catalogId: "c", theme: nil, sendDataModel: false))
+        #expect(create == .createSurface(A2UISurfaceDefinition(surfaceId: "main", catalogId: "c", protocolVersion: "v0.9")))
 
         let update = try A2UIMessage.decode(line: Data(#"{"version":"v0.9.1","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"Hi","variant":"h1"}]}}"#.utf8))
         #expect(update == .updateComponents(surfaceId: "s", components: [
@@ -97,7 +104,7 @@ struct MessageDecodingTests {
         ]))
 
         let removal = try A2UIMessage.decode(line: Data(#"{"version":"v0.9.1","updateDataModel":{"surfaceId":"s","path":"/a"}}"#.utf8))
-        #expect(removal == .updateDataModel(surfaceId: "s", path: "/a", value: nil))
+        #expect(removal == .updateDataModel(surfaceId: "s", path: "/a", value: .null))   // v0.9: no value deletes
 
         let wholeModel = try A2UIMessage.decode(line: Data(#"{"updateDataModel":{"surfaceId":"s","value":{"a":1}}}"#.utf8))
         #expect(wholeModel == .updateDataModel(surfaceId: "s", path: "/", value: ["a": 1]))
@@ -178,7 +185,7 @@ struct SurfaceStoreTests {
 
     @Test func pendingChildrenRenderAsPlaceholdersUntilTheyArrive() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         #expect(store.surfaces["s"]?.resolvedTree() == nil)   // no root yet
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "Card", properties: ["child": "body"]),
@@ -195,7 +202,7 @@ struct SurfaceStoreTests {
         store.apply(.updateComponents(surfaceId: "s", components: [A2UIComponent(id: "root", type: "Divider")]))
         store.apply(.updateDataModel(surfaceId: "s", path: "/x", value: 1))
         #expect(store.surfaces["s"] == nil)
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         let surface = try #require(store.surfaces["s"])
         #expect(surface.components["root"]?.type == "Divider")
         #expect(surface.dataModel == ["x": 1])
@@ -203,10 +210,10 @@ struct SurfaceStoreTests {
 
     @Test func duplicateCreateIsReportedAndDeleteRemoves() {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
-        store.apply(.createSurface(surfaceId: "s", catalogId: "other", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
+        store.apply(.create("s", catalog: "other"))
         #expect(store.surfaces["s"]?.catalogId == "c")
-        #expect(store.diagnostics.map(\.message) == ["Surface already exists"])
+        #expect(store.diagnostics.map(\.message) == ["INTEGRITY_ERROR: Surface 's' already exists"])
         store.apply(.deleteSurface(surfaceId: "s"))
         store.apply(.deleteSurface(surfaceId: "missing"))   // no-op
         #expect(store.surfaces.isEmpty)
@@ -214,10 +221,10 @@ struct SurfaceStoreTests {
 
     @Test func templatesExpandPerItemWithRelativeBindings() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "List", properties: ["children": ["componentId": "item", "path": "/products"]]),
-            A2UIComponent(id: "item", type: "Text", properties: ["text": ["path": "name"]]),
+            A2UIComponent(id: "item", type: "Text", properties: ["text": ["@path": "name"]]),
         ]))
         #expect(shape(try #require(store.surfaces["s"]?.resolvedTree())) == "root")   // data not here yet
         store.apply(.updateDataModel(surfaceId: "s", path: "/products", value: [["name": "Tea"], ["name": "Cake"]]))
@@ -230,7 +237,7 @@ struct SurfaceStoreTests {
 
     @Test func cyclesAndRunawayTemplatesAreContained() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "Column", properties: ["children": ["a"]]),
             A2UIComponent(id: "a", type: "Card", properties: ["child": "root"]),
@@ -250,7 +257,7 @@ struct SurfaceStoreTests {
 
     @Test func modalAndTabsChildrenAreReachable() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "Tabs", properties: ["tabs": [["title": "General", "child": "m"], ["title": "More", "child": "t2"]]]),
             A2UIComponent(id: "m", type: "Modal", properties: ["trigger": "open", "content": "body"]),
@@ -262,11 +269,11 @@ struct SurfaceStoreTests {
 
     @Test func inputWritesBackAndActionsResolveContextAtTapTime() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "booking-surface", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("booking-surface", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "booking-surface", components: [
             A2UIComponent(id: "root", type: "Button", properties: [
                 "child": "btn-text",
-                "action": ["event": ["name": "submit_reservation", "context": ["time": ["path": "/reservationTime"], "size": ["path": "/partySize"]]]],
+                "action": ["event": ["name": "submit_reservation", "context": ["time": ["@path": "/reservationTime"], "size": ["@path": "/partySize"]]]],
             ]),
         ]))
         store.setValue("7:00 PM", at: JSONPointer("/reservationTime")!, surfaceId: "booking-surface")
@@ -279,15 +286,15 @@ struct SurfaceStoreTests {
         }
         #expect(event.context == ["time": "7:00 PM", "size": 4])
         let json = String(decoding: try event.encoded(), as: UTF8.self)
-        #expect(json == #"{"action":{"context":{"size":4,"time":"7:00 PM"},"name":"submit_reservation","sourceComponentId":"root","surfaceId":"booking-surface","timestamp":"2026-02-25T10:40:00Z"},"version":"v0.9.1"}"#)
+        #expect(json == #"{"action":{"context":{"size":4,"time":"7:00 PM"},"name":"submit_reservation","sourceComponentId":"root","surfaceId":"booking-surface","timestamp":"2026-02-25T10:40:00Z"},"version":"1.0"}"#)
     }
 
     @Test func functionCallActionsStayOnDevice() throws {
         let store = A2UISurfaceStore()
-        store.apply(.createSurface(surfaceId: "s", catalogId: "c", theme: nil, sendDataModel: false))
+        store.apply(.create("s", catalog: "c"))
         store.apply(.updateComponents(surfaceId: "s", components: [
             A2UIComponent(id: "root", type: "Button", properties: [
-                "action": ["functionCall": ["call": "openUrl", "args": ["url": "https://a2ui.org/help"]]],
+                "action": ["functionCall": ["@call": "openUrl", "args": ["url": "https://a2ui.org/help"]]],
             ]),
         ]))
         let tree = try #require(store.surfaces["s"]?.resolvedTree())

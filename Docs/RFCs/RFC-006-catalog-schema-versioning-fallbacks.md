@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Draft. First slice implemented on `v2/genui-host` |
 | **Module** | `FluidStreamHost` (pure Swift, no UI, so it runs on a device or a server) |
-| **Depends on** | RFC-005 (the A2UI host) |
+| **Depends on** | RFC-005 (the A2UI host). Under A2UI 1.0, `minVersion` and `fallback` live in `@metadata.extensions` (RFC-007) |
 
 ## TL;DR
 

@@ -72,9 +72,11 @@ final class DemoModel {
     private(set) var lastSent: String?
     private var task: Task<Void, Never>?
 
-    let catalog = A2UICatalog.basic.registering("StayCard") { context in
-        StayCard(stay: context.props(as: Stay.self))
-    }
+    /// The app's own catalog: the basic components plus StayCard, under the app's own id.
+    let catalog = A2UICatalog(id: "dev.fluidstreamkit.genuidemo:catalog/1", including: .basic)
+        .registering("StayCard") { context in
+            StayCard(stay: context.props(as: Stay.self))
+        }
 
     func play() {
         task?.cancel()
@@ -109,10 +111,12 @@ final class DemoModel {
     }
 
     func handle(_ action: A2UIAction) {
+        // A real app sends every message to its agent. Here we show it, and script the reply.
+        if let message = action.messageToAgent {
+            lastSent = (try? message.encoded()).map { String(decoding: $0, as: UTF8.self) }
+        }
         switch action {
         case .event(let event):
-            // A real app sends this to its agent. Here we show it, and script the reply.
-            lastSent = (try? event.encoded()).map { String(decoding: $0, as: UTF8.self) }
             guard event.name == "book" else { return }
             let store = store
             Task {
@@ -123,6 +127,8 @@ final class DemoModel {
             }
         case .localFunction(let name, _):
             lastSent = "Declined on-device function: \(name)"
+        case .callAgentFunction, .error:
+            break
         }
     }
 }

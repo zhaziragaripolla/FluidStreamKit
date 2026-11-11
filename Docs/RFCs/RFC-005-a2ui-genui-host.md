@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Draft. Implementation started on `v2/genui-host` |
 | **Modules** | `FluidStreamHost` (protocol and state, no UI) and `FluidStreamHostUI` (SwiftUI rendering) |
-| **Spec** | [A2UI v0.9.1](https://a2ui.org/specification/v0.9.1-a2ui/), basic catalog. Messages tagged `"v0.9"` are accepted too |
+| **Spec** | Written for [A2UI v0.9.1](https://a2ui.org/specification/v0.9.1-a2ui/). The host now speaks A2UI 1.0 and upgrades v0.9 messages: see RFC-007 |
 | **Depends on** | RFC-002 (the demuxer routes A2UI payloads), RFC-004 (performance methodology) |
 
 ## TL;DR

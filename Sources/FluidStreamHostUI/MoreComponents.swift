@@ -6,8 +6,7 @@ extension A2UICatalog {
     /// A2UI's basic catalog doesn't define. It has its own catalog id, so an agent can tell
     /// the two apart.
     public static var fluid: A2UICatalog {
-        var c = A2UICatalog.basic
-        c.id = "https://github.com/zhaziragaripolla/FluidStreamKit/catalogs/fluid/1"
+        var c = A2UICatalog(id: "https://github.com/zhaziragaripolla/FluidStreamKit/catalogs/fluid/1", including: .basic)
         c.register(A2UIComponentSchema.table) { A2UITableView(context: $0) }
         return c
     }
@@ -21,7 +20,7 @@ extension A2UIComponentSchema {
         properties: [
             .init("columns", .array, required: true,
                   "[{\"title\": \"Price\", \"path\": \"price\", \"align\": \"end\"}]. path is relative to each row"),
-            .init("rows", .array, required: true, "Bind with {\"path\": \"/items\"} to an array of objects"),
+            .init("rows", .array, required: true, "Bind with {\"@path\": \"/items\"} to an array of objects"),
         ],
         fallback: .init(components: [["id": "root", "component": "Column", "children": []]]))
 }
@@ -35,11 +34,12 @@ enum A2UIChoice {
         let value: String
     }
 
-    static func options(from value: JSONValue?) -> [Option] {
+    /// Options from `[{"label", "value"}]`. Labels may be bindings, so `resolve` reads them.
+    static func options(from value: JSONValue?, resolve: (JSONValue?) -> JSONValue? = { $0 }) -> [Option] {
         (value?.arrayValue ?? []).compactMap { item in
             if let s = item.stringValue { return Option(label: s, value: s) }
             guard let v = item["value"]?.displayString, !v.isEmpty else { return nil }
-            return Option(label: item["label"]?.displayString ?? v, value: v)
+            return Option(label: resolve(item["label"])?.displayString ?? v, value: v)
         }
     }
 
@@ -59,26 +59,51 @@ enum A2UIChoice {
 
 struct A2UIChoicePickerView: View {
     let context: A2UIComponentContext
+    @State private var filter = ""
 
     var body: some View {
-        let options = A2UIChoice.options(from: context.value("options"))
-        let exclusive = context.string("variant") == "mutuallyExclusive"
+        let all = A2UIChoice.options(from: context.value("options"), resolve: context.resolve)
+        let options = filter.isEmpty ? all : all.filter { $0.label.localizedCaseInsensitiveContains(filter) }
+        // 1.0 default: one choice.
+        let exclusive = context.string("variant") != "multipleSelection"
+        let chips = context.string("displayStyle") == "chips"
         let selection = context.binding(
             "value", default: [String](), get: { A2UIChoice.selection(from: $0) },
             set: { .array($0.map(JSONValue.string)) })
         VStack(alignment: .leading, spacing: 6) {
             if let label = context.string("label") { Text(label).font(.subheadline) }
-            FlowRow(spacing: 8) {
+            if context.bool("filterable") == true {
+                TextField("Filter", text: $filter).textFieldStyle(.roundedBorder)
+            }
+            if chips {
+                FlowRow(spacing: 8) {
+                    ForEach(options, id: \.self) { option in
+                        let isOn = selection.wrappedValue.contains(option.value)
+                        Button(option.label) {
+                            selection.wrappedValue = A2UIChoice.toggling(option.value, in: selection.wrappedValue, exclusive: exclusive)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(isOn ? .accentColor : .secondary)
+                        .accessibilityAddTraits(isOn ? .isSelected : [])
+                    }
+                }
+            } else {
                 ForEach(options, id: \.self) { option in
                     let isOn = selection.wrappedValue.contains(option.value)
-                    Button(option.label) {
+                    Button {
                         selection.wrappedValue = A2UIChoice.toggling(option.value, in: selection.wrappedValue, exclusive: exclusive)
+                    } label: {
+                        Label(option.label, systemImage: exclusive
+                              ? (isOn ? "largecircle.fill.circle" : "circle")
+                              : (isOn ? "checkmark.square.fill" : "square"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
-                    .tint(isOn ? .accentColor : .secondary)
+                    .buttonStyle(.plain)
                     .accessibilityAddTraits(isOn ? .isSelected : [])
                 }
             }
+            A2UICheckMessages(failures: context.failingChecks, hasValue: !selection.wrappedValue.isEmpty)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(context.string("label") ?? "")
@@ -142,8 +167,9 @@ struct A2UIDateTimeInputView: View {
     let context: A2UIComponentContext
 
     var body: some View {
-        let showsDate = context.bool("enableDate") ?? true
+        // 1.0 defaults both to false; with neither enabled, ask for a date.
         let showsTime = context.bool("enableTime") ?? false
+        let showsDate = context.bool("enableDate") ?? !showsTime
         let date = context.binding(
             "value", default: Date(), get: { $0.stringValue.flatMap(A2UIDateValue.parse) },
             set: { .string(A2UIDateValue.format($0, includesTime: showsTime)) })

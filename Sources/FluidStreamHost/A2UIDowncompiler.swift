@@ -43,11 +43,20 @@ public struct A2UIDowncompiler: Sendable {
         return result
     }
 
-    /// Down-compiles an `updateComponents` message. Other messages pass through unchanged.
+    /// Down-compiles the components in an `updateComponents` or `createSurface` message. Other
+    /// messages pass through unchanged.
     public func downcompile(_ message: A2UIMessage) -> (message: A2UIMessage, substitutions: [Substitution]) {
-        guard case .updateComponents(let surfaceId, let components) = message else { return (message, []) }
-        let result = downcompile(components)
-        return (.updateComponents(surfaceId: surfaceId, components: result.components), result.substitutions)
+        switch message {
+        case .updateComponents(let surfaceId, let components):
+            let result = downcompile(components)
+            return (.updateComponents(surfaceId: surfaceId, components: result.components), result.substitutions)
+        case .createSurface(var definition) where !definition.components.isEmpty:
+            let result = downcompile(definition.components)
+            definition.components = result.components
+            return (.createSurface(definition), result.substitutions)
+        default:
+            return (message, [])
+        }
     }
 
     private func process(_ component: A2UIComponent, pass: Int, into result: inout Result) {
@@ -70,7 +79,7 @@ public struct A2UIDowncompiler: Sendable {
            let expanded = Self.expand(fallback, for: component), !expanded.isEmpty {
             note(.declaredFallback)
             for replacement in expanded { process(replacement, pass: pass + 1, into: &result) }
-        } else if component["fallback"]?.stringValue != nil {
+        } else if component.fallbackId != nil {
             note(.inlineFallback)
             result.components.append(component)
         } else {

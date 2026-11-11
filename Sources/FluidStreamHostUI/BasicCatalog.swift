@@ -2,13 +2,11 @@ public import SwiftUI
 import Foundation
 
 extension A2UICatalog {
-    /// The A2UI v0.9.1 basic catalog, rendered natively.
-    ///
-    /// Covered so far: Text, Image, Icon, Row, Column, List, Card, Divider, Button, TextField,
-    /// CheckBox, Slider, ChoicePicker and DateTimeInput. Tabs, Modal, Video and AudioPlayer come
-    /// next (RFC-005 rollout step 3); until then they render through the fallback.
+    /// The A2UI 1.0 basic catalog, rendered natively: all eighteen components. It also answers
+    /// to the v0.9 and v0.9.1 basic catalog ids, for agents that haven't moved to 1.0.
     public static var basic: A2UICatalog {
-        var c = A2UICatalog(id: "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json")
+        var c = A2UICatalog(id: A2UIVersion.basicCatalogID)
+        c.aliases = A2UIVersion.basicCatalogIDs.subtracting([A2UIVersion.basicCatalogID])
         c.register("Text") { A2UITextView(context: $0) }
         c.register("Image") { A2UIImageView(context: $0) }
         c.register("Icon") { A2UIIconView(context: $0) }
@@ -23,6 +21,10 @@ extension A2UICatalog {
         c.register("Slider") { A2UISliderView(context: $0) }
         c.register("ChoicePicker") { A2UIChoicePickerView(context: $0) }
         c.register("DateTimeInput") { A2UIDateTimeInputView(context: $0) }
+        c.register("Tabs") { A2UITabsView(context: $0) }
+        c.register("Modal") { A2UIModalView(context: $0) }
+        c.register("Video") { A2UIVideoView(context: $0) }
+        c.register("AudioPlayer") { A2UIAudioPlayerView(context: $0) }
         for schema in A2UIComponentSchema.basicSubset { c.describe(schema) }
         return c
     }
@@ -34,28 +36,76 @@ struct A2UITextView: View {
     let context: A2UIComponentContext
 
     var body: some View {
-        let raw = context.string("text") ?? ""
-        let attributed = (try? AttributedString(
-            markdown: raw, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(raw)
-        Text(attributed)
-            .font(font)
-            .foregroundStyle(context.string("variant") == "caption" ? .secondary : .primary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityAddTraits(isHeading ? .isHeader : [])
+        let blocks = A2UIMarkdown.blocks(context.string("text") ?? "")
+        let caption = context.string("variant") == "caption"
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                Text(block.text)
+                    .font(block.level > 0 ? Self.headingFont(block.level) : (caption ? .caption : legacyFont))
+                    .foregroundStyle(caption && block.level == 0 ? .secondary : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(block.level > 0 || isLegacyHeading ? .isHeader : [])
+            }
+        }
     }
 
-    private var isHeading: Bool { context.string("variant")?.hasPrefix("h") == true }
+    static func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1: .largeTitle.bold()
+        case 2: .title.bold()
+        case 3: .title2.bold()
+        case 4: .title3.weight(.semibold)
+        default: .headline
+        }
+    }
 
-    private var font: Font {
+    /// v0.9 agents send `variant: "h1"`…`"h5"`; 1.0 uses Markdown headings instead.
+    private var isLegacyHeading: Bool { context.string("variant")?.hasPrefix("h") == true }
+
+    private var legacyFont: Font {
         switch context.string("variant") {
-        case "h1": .largeTitle.bold()
-        case "h2": .title.bold()
-        case "h3": .title2.bold()
-        case "h4": .title3.weight(.semibold)
-        case "h5": .headline
-        case "caption": .caption
+        case "h1": Self.headingFont(1)
+        case "h2": Self.headingFont(2)
+        case "h3": Self.headingFont(3)
+        case "h4": Self.headingFont(4)
+        case "h5": Self.headingFont(5)
         default: .body
         }
+    }
+}
+
+/// Markdown for Text: `#` headings and paragraphs, with inline styles inside each.
+enum A2UIMarkdown {
+    struct Block {
+        var level: Int
+        var text: AttributedString
+    }
+
+    static func blocks(_ raw: String) -> [Block] {
+        var blocks: [Block] = []
+        var paragraph: [Substring] = []
+        func flush() {
+            guard !paragraph.isEmpty else { return }
+            blocks.append(Block(level: 0, text: inline(paragraph.joined(separator: "\n"))))
+            paragraph = []
+        }
+        for line in raw.split(separator: "\n", omittingEmptySubsequences: false) {
+            let hashes = line.prefix { $0 == "#" }.count
+            if (1...6).contains(hashes), line.dropFirst(hashes).first == " " {
+                flush()
+                blocks.append(Block(level: hashes, text: inline(String(line.dropFirst(hashes + 1)))))
+            } else {
+                paragraph.append(line)
+            }
+        }
+        flush()
+        if blocks.isEmpty { blocks.append(Block(level: 0, text: AttributedString(""))) }
+        return blocks
+    }
+
+    static func inline(_ s: String) -> AttributedString {
+        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(s)
     }
 }
 
@@ -104,28 +154,41 @@ struct A2UIIconView: View {
     let context: A2UIComponentContext
 
     var body: some View {
-        Image(systemName: Self.symbol(for: context.string("name") ?? ""))
+        let value = context.value("name")
+        // `{"svgPath": …}` icons aren't drawn yet; show a neutral symbol in their place.
+        let name = value?.stringValue
+        Image(systemName: name.map(Self.symbol(for:)) ?? "square.dashed")
             .frame(minWidth: 24, minHeight: 24)   // one size, so icons in a list line up
-            .accessibilityLabel(context.string("name") ?? "")
+            .accessibilityLabel(name ?? "")
     }
 
-    /// A2UI icon names are Material-style; map the common ones to SF Symbols, and pass anything
-    /// else through as a symbol name.
-    static func symbol(for name: String) -> String {
-        let map: [String: String] = [
-            "check": "checkmark", "close": "xmark", "add": "plus", "remove": "minus",
-            "search": "magnifyingglass", "mail": "envelope", "email": "envelope", "phone": "phone",
-            "home": "house", "settings": "gearshape", "person": "person", "favorite": "heart",
-            "star": "star", "share": "square.and.arrow.up", "delete": "trash", "edit": "pencil",
-            "info": "info.circle", "warning": "exclamationmark.triangle", "error": "exclamationmark.circle",
-            "calendar": "calendar", "event": "calendar", "location": "mappin", "place": "mappin",
-            "send": "paperplane", "play": "play.fill", "pause": "pause.fill", "arrowBack": "chevron.left",
-            "arrowForward": "chevron.right", "menu": "line.3.horizontal", "shoppingCart": "cart",
-            "lock": "lock", "notifications": "bell", "camera": "camera", "photo": "photo",
-            "upload": "square.and.arrow.up", "download": "square.and.arrow.down", "help": "questionmark.circle",
-        ]
-        return map[name] ?? name
-    }
+    /// The A2UI 1.0 icon names, mapped to SF Symbols. Anything else passes through as a
+    /// symbol name, so an app's own agent can use SF Symbols directly.
+    static let symbols: [String: String] = [
+        "accountCircle": "person.crop.circle", "add": "plus", "arrowBack": "chevron.left",
+        "arrowForward": "chevron.right", "attachFile": "paperclip", "calendarToday": "calendar",
+        "call": "phone", "camera": "camera", "check": "checkmark", "close": "xmark", "delete": "trash",
+        "download": "square.and.arrow.down", "edit": "pencil", "event": "calendar",
+        "error": "exclamationmark.circle", "fastForward": "forward.fill", "favorite": "heart.fill",
+        "favoriteOff": "heart", "folder": "folder", "help": "questionmark.circle", "home": "house",
+        "info": "info.circle", "locationOn": "mappin.and.ellipse", "lock": "lock", "lockOpen": "lock.open",
+        "mail": "envelope", "menu": "line.3.horizontal", "moreVert": "ellipsis.vertical",
+        "moreHoriz": "ellipsis", "notificationsOff": "bell.slash", "notifications": "bell",
+        "pause": "pause.fill", "payment": "creditcard", "person": "person", "phone": "phone",
+        "photo": "photo", "play": "play.fill", "print": "printer", "refresh": "arrow.clockwise",
+        "rewind": "backward.fill", "search": "magnifyingglass", "send": "paperplane",
+        "settings": "gearshape", "share": "square.and.arrow.up", "shoppingCart": "cart",
+        "skipNext": "forward.end.fill", "skipPrevious": "backward.end.fill", "star": "star.fill",
+        "starHalf": "star.leadinghalf.filled", "starOff": "star", "stop": "stop.fill",
+        "upload": "square.and.arrow.up", "visibility": "eye", "visibilityOff": "eye.slash",
+        "volumeDown": "speaker.wave.1", "volumeMute": "speaker", "volumeOff": "speaker.slash",
+        "volumeUp": "speaker.wave.3", "warning": "exclamationmark.triangle",
+        // v0.9 names that agents still send.
+        "remove": "minus", "email": "envelope", "location": "mappin", "place": "mappin",
+        "calendar": "calendar",
+    ]
+
+    static func symbol(for name: String) -> String { symbols[name] ?? name }
 }
 
 // MARK: - Layout
@@ -139,7 +202,14 @@ struct A2UIStackView: View {
         let between = justify == "spaceBetween" || justify == "spaceAround" || justify == "spaceEvenly"
         let content = ForEach(Array(context.children.enumerated()), id: \.element.id) { index, child in
             if between, index > 0 { Spacer(minLength: 8) }
-            context.render(child)
+            // `weight` works like flex-grow: weighted children share the free space.
+            if let weight = child.component?["weight"]?.doubleValue, weight > 0 {
+                context.render(child)
+                    .frame(maxWidth: axis == .horizontal ? .infinity : nil, maxHeight: axis == .vertical ? .infinity : nil)
+                    .layoutPriority(weight)
+            } else {
+                context.render(child)
+            }
         }
         Group {
             if axis == .horizontal {
@@ -231,6 +301,7 @@ struct A2UIButtonView: View {
         let button = Button(action: context.performAction) {
             ForEach(context.children) { context.render($0) }
         }
+        .disabled(!context.failingChecks.isEmpty)
         switch context.string("variant") {
         case "primary": button.buttonStyle(.borderedProminent)
         case "borderless": button.buttonStyle(.borderless)
@@ -244,27 +315,33 @@ struct A2UITextFieldView: View {
 
     var body: some View {
         let label = context.string("label") ?? ""
+        let prompt = context.string("placeholder") ?? label
         let variant = context.string("variant") ?? "shortText"
         let isNumber = variant == "number"
         let text = context.binding("value", default: "", get: { $0.displayString }, set: { text -> JSONValue in
             if isNumber, let n = Double(text) { return .number(n) }
             return .string(text)
         })
+        let failures = context.failingChecks
         VStack(alignment: .leading, spacing: 4) {
-            switch variant {
-            case "obscured":
-                SecureField(label, text: text)
-            case "longText":
-                TextField(label, text: text, axis: .vertical).lineLimit(3...8)
-            default:
-                TextField(label, text: text)
-                    #if os(iOS)
-                    .keyboardType(isNumber ? .decimalPad : .default)
-                    #endif
+            if !label.isEmpty { Text(label).font(.subheadline) }
+            Group {
+                switch variant {
+                case "obscured":
+                    SecureField(label, text: text, prompt: Text(prompt))
+                case "longText":
+                    TextField(label, text: text, prompt: Text(prompt), axis: .vertical).lineLimit(3...8)
+                default:
+                    TextField(label, text: text, prompt: Text(prompt))
+                        #if os(iOS)
+                        .keyboardType(isNumber ? .decimalPad : .default)
+                        #endif
+                }
             }
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel(label)
+            A2UICheckMessages(failures: failures, hasValue: !(context.string("value") ?? "").isEmpty)
         }
-        .textFieldStyle(.roundedBorder)
-        .accessibilityLabel(label)
     }
 }
 
@@ -283,11 +360,34 @@ struct A2UISliderView: View {
     var body: some View {
         let lower = context.double("min") ?? 0
         let upper = max(context.double("max") ?? 100, lower + 1)
+        let value = context.binding("value", default: lower, get: { $0.doubleValue }, set: { .number($0) })
         VStack(alignment: .leading, spacing: 4) {
             if let label = context.string("label") { Text(label).font(.subheadline) }
-            Slider(value: context.binding("value", default: lower, get: { $0.doubleValue }, set: { .number($0) }),
-                   in: lower...upper)
-                .accessibilityLabel(context.string("label") ?? "")
+            if let steps = context.double("steps"), steps >= 1 {
+                Slider(value: value, in: lower...upper, step: (upper - lower) / steps)
+                    .accessibilityLabel(context.string("label") ?? "")
+            } else {
+                Slider(value: value, in: lower...upper)
+                    .accessibilityLabel(context.string("label") ?? "")
+            }
+        }
+    }
+}
+
+/// The messages of an input's failing `@checks`, shown under it once the user has typed something.
+struct A2UICheckMessages: View {
+    let failures: [A2UICheckFailure]
+    let hasValue: Bool
+
+    var body: some View {
+        if hasValue {
+            ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
+                if let message = failure.message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(failure.severity == "error" ? Color.red : Color.secondary)
+                }
+            }
         }
     }
 }
